@@ -280,15 +280,75 @@
         </div>
       </div>
     </Transition>
+    <!-- Cloud Chat Widget -->
+    <div class="chat-widget">
+      <button class="chat-toggle-btn" @click="toggleChat">
+        <span class="chat-icon">💬</span>
+        <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
+      </button>
+
+      <Transition name="slide-up">
+        <div v-if="isChatOpen" class="chat-window">
+          <div class="chat-header">
+            <h3>Obrolan Kita 💑</h3>
+            <button class="close-chat" @click="toggleChat">✕</button>
+          </div>
+          
+          <div class="chat-messages" ref="chatContainer">
+            <div v-if="!userName" class="name-setup">
+              <p>Siapa nama kamu sayang?</p>
+              <input v-model="tempName" @keyup.enter="saveName" placeholder="Tulis namamu..." />
+              <button @click="saveName">Masuk Chat</button>
+            </div>
+
+            <template v-else>
+               <div v-if="chatMessages.length === 0" class="empty-chat">
+                Belum ada pesan. Mulai ngobrol yuk! 👋
+              </div>
+              <div 
+                v-for="msg in chatMessages" 
+                :key="msg.id" 
+                class="message-bubble"
+                :class="{ 'my-message': msg.sender === userName, 'their-message': msg.sender !== userName }"
+              >
+                <div class="message-content">
+                  <span class="message-sender">{{ msg.sender }}</span>
+                  <p>{{ msg.text }}</p>
+                  <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <div v-if="userName" class="chat-input-area">
+            <input 
+              v-model="newMessage" 
+              @keyup.enter="sendMessage"
+              placeholder="Ketik pesan sayang..." 
+            />
+            <button @click="sendMessage">
+              <span class="send-icon">🚀</span>
+            </button>
+          </div>
+        </div>
+      </Transition>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
+// Firebase Imports
+// Firebase Imports
+import { storage, db } from '../firebase'
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
+import { collection, addDoc, deleteDoc, doc, query, orderBy, serverTimestamp, onSnapshot, limit } from "firebase/firestore"
+
 // Assets Import
 // Assets Import
 import bgMusicFile from '../assets/The 1975 - About You (Official) - The1975VEVO.mp3'
+import bgMusicFile2 from '../assets/night_changes.mp3'
 import dollVoiceFile from '../assets/doll_voice.mp3'
 
 // Photos
@@ -327,7 +387,8 @@ const dollVoice = dollVoiceFile
 
 // Playlist Data
 const playlist = [
-  { title: 'About You', artist: 'The 1975', src: bgMusicFile }
+  { title: 'About You', artist: 'The 1975', src: bgMusicFile },
+  { title: 'Night Changes', artist: 'One Direction', src: bgMusicFile2 }
 ]
 
 // Data
@@ -428,6 +489,7 @@ const handleScroll = () => {
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
   loadVoiceNotes()
+  initChat()
 })
 
 onUnmounted(() => {
@@ -517,62 +579,66 @@ const voiceNotes = ref([])
 const recordingDuration = ref(0)
 let recordingTimer = null
 
-// IndexedDB Helper
-const dbName = 'BucinDB'
-const storeName = 'voiceNotes'
-
-const openDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName, 1)
-    request.onerror = (event) => reject('DB Error: ' + event.target.error)
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true })
-      }
-    }
-    request.onsuccess = (event) => resolve(event.target.result)
-  })
-}
-
 const loadVoiceNotes = async () => {
+  if (!db) return
+  // Gunakan onSnapshot untuk Real-time Updates (Bisa lihat suara orang lain langsung)
+  const q = query(collection(db, "voiceNotes"), orderBy("createdAt", "desc"));
+  
+  onSnapshot(q, (snapshot) => {
+    voiceNotes.value = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+  }, (error) => {
+    console.error("Error loading voice notes:", error);
+  });
+}
+
+const saveVoiceNoteToDB = async (audioBlob, duration) => {
+  if (!storage || !db) {
+    alert("⚠️ FITUR BELUM DI-CONFIG! \n\nAgar pesan suara bisa tersimpan online, kamu harus setting 'src/firebase.js' dulu ya! \n(Cek file tersebut untuk caranya)");
+    return false;
+  }
+
   try {
-    const db = await openDB()
-    const tx = db.transaction(storeName, 'readonly')
-    const store = tx.objectStore(storeName)
-    const request = store.getAll()
+    const filename = `voicenotes/${Date.now()}.mp3`;
+    const audioRef = storageRef(storage, filename);
     
-    request.onsuccess = () => {
-      // Convert stored Blobs to URLs
-      voiceNotes.value = request.result.map(note => ({
-        ...note,
-        url: URL.createObjectURL(note.blob)
-      })).reverse() // Show newest first
+    // Upload Blob
+    await uploadBytes(audioRef, audioBlob);
+    const downloadURL = await getDownloadURL(audioRef);
+    
+    // Save Metadata to Firestore
+    await addDoc(collection(db, "voiceNotes"), {
+      url: downloadURL,
+      storagePath: filename,
+      duration: duration,
+      date: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      createdAt: serverTimestamp()
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error saving voice note:", error);
+    alert("Gagal menyimpan: " + error.code);
+    return false;
+  }
+}
+
+const deleteVoiceNoteFromDB = async (note) => {
+  if (!db || !storage) return;
+  try {
+    // Delete from Firestore
+    await deleteDoc(doc(db, "voiceNotes", note.id));
+    
+    // Delete from Storage
+    if (note.storagePath) {
+      const fileRef = storageRef(storage, note.storagePath);
+      await deleteObject(fileRef);
     }
   } catch (error) {
-    console.error('Error loading voice notes:', error)
-  }
-}
-
-const saveVoiceNoteToDB = async (note) => {
-  try {
-    const db = await openDB()
-    const tx = db.transaction(storeName, 'readwrite')
-    const store = tx.objectStore(storeName)
-    store.add(note)
-  } catch (error) {
-    console.error('Error saving voice note:', error)
-  }
-}
-
-const deleteVoiceNoteFromDB = async (id) => {
-  try {
-    const db = await openDB()
-    const tx = db.transaction(storeName, 'readwrite')
-    const store = tx.objectStore(storeName)
-    store.delete(id)
-  } catch (error) {
-    console.error('Error deleting voice note:', error)
+    console.error("Error deleting:", error);
+    alert("Gagal menghapus: " + error.message);
   }
 }
 
@@ -596,19 +662,13 @@ const startRecording = async () => {
 
     mediaRecorder.value.onstop = async () => {
       const audioBlob = new Blob(audioChunks.value, { type: 'audio/mp3' })
-      const now = new Date()
       
-      const newNote = {
-        blob: audioBlob,
-        date: now.toLocaleDateString() + ' ' + now.toLocaleTimeString(),
-        duration: recordingDuration.value
+      // Save directly to Firebase
+      const success = await saveVoiceNoteToDB(audioBlob, recordingDuration.value)
+      
+      if (success) {
+        // loadVoiceNotes() // Tidak perlu dipanggil manual lagi karena sudah pakai onSnapshot
       }
-      
-      // Save to DB
-      await saveVoiceNoteToDB(newNote)
-      
-      // Reload to update UI
-      loadVoiceNotes()
       
       recordingDuration.value = 0
     }
@@ -623,9 +683,9 @@ const startRecording = async () => {
   } catch (error) {
     console.error('Error accessing microphone:', error)
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      alert('Gagal mengakses mikrofon! 🎤\n\nPENTING: Fitur Voice Note hanya bisa digunakan di "localhost" atau website yang menggunakan HTTPS (gembok hijau).\n\nJika kamu membuka ini di HP lewat IP address (contoh: 192.168...), browser akan memblokir mikrofon demi keamanan.')
+      alert('Gagal mengakses mikrofon! 🎤\n\nVoice Note hanya jalan di localhost atau HTTPS.')
     } else {
-      alert('Maaf, tidak bisa mengakses mikrofon. Pastikan izin diberikan di pengaturan browser kamu. 🎤')
+      alert('Maaf, tidak bisa mengakses mikrofon. Izinkan akses dulu ya! 🎤')
     }
   }
 }
@@ -636,16 +696,15 @@ const stopRecording = () => {
     isRecording.value = false
     clearInterval(recordingTimer)
     
-    // Stop all tracks to release microphone
     mediaRecorder.value.stream.getTracks().forEach(track => track.stop())
   }
 }
 
 const deleteVoiceNote = async (index) => {
   const note = voiceNotes.value[index]
-  if (note.id) {
-    await deleteVoiceNoteFromDB(note.id)
-    voiceNotes.value.splice(index, 1)
+  if (confirm("Yakin mau hapus pesan ini?")) {
+    await deleteVoiceNoteFromDB(note)
+    // loadVoiceNotes() // Auto updated by snapshot
   }
 }
 
@@ -674,6 +733,84 @@ const playDollVoice = () => {
   setTimeout(() => {
     showLoveBubble.value = false
   }, 3000)
+}
+
+// Chat Logic
+const isChatOpen = ref(false)
+const chatMessages = ref([])
+const newMessage = ref('')
+const userName = ref(localStorage.getItem('bucin_username') || '')
+const tempName = ref('')
+const unreadCount = ref(0)
+const chatContainer = ref(null)
+
+const toggleChat = () => {
+  isChatOpen.value = !isChatOpen.value
+  if (isChatOpen.value) {
+    unreadCount.value = 0
+    scrollToBottom()
+  }
+}
+
+const saveName = () => {
+  if (tempName.value.trim()) {
+    userName.value = tempName.value.trim()
+    localStorage.setItem('bucin_username', userName.value)
+  }
+}
+
+const initChat = () => {
+  if (!db) return
+
+  const q = query(collection(db, "chats"), orderBy("createdAt", "asc"), limit(100))
+  
+  onSnapshot(q, (snapshot) => {
+    const msgs = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }))
+    
+    chatMessages.value = msgs
+    
+    if (!isChatOpen.value && msgs.length > 0) {
+      // Simple logic: if new message comes and chat is closed, increment badge
+      // In real app we compare IDs, but here just simple visual cue
+      unreadCount.value++
+    }
+    
+    scrollToBottom()
+  })
+}
+
+const sendMessage = async () => {
+  if (!newMessage.value.trim() || !db) return
+
+  try {
+    await addDoc(collection(db, "chats"), {
+      text: newMessage.value.trim(),
+      sender: userName.value,
+      createdAt: serverTimestamp()
+    })
+    newMessage.value = ''
+    scrollToBottom()
+  } catch (error) {
+    console.error("Error sending message:", error)
+  }
+}
+
+const scrollToBottom = () => {
+  setTimeout(() => {
+    if (chatContainer.value) {
+      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+    }
+  }, 100)
+}
+
+const formatTime = (timestamp) => {
+  if (!timestamp) return ''
+  // Handle Firestore Timestamp or Date object
+  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 </script>
 
@@ -1471,5 +1608,233 @@ const playDollVoice = () => {
   .story-text { font-size: 1.2rem; }
   .love-text-3d { font-size: 2.5rem; }
   .cute-doll { width: 100px; bottom: 80px; }
+  .chat-window { width: 90%; right: 5%; bottom: 90px; }
+}
+
+/* Chat Widget Styles */
+.chat-widget {
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  z-index: 2000;
+}
+
+.chat-toggle-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(45deg, var(--primary), #ff4d88);
+  color: white;
+  font-size: 1.8rem;
+  cursor: pointer;
+  box-shadow: 0 5px 15px rgba(255, 77, 136, 0.4);
+  transition: 0.3s;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+.unread-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: red;
+  color: white;
+  font-size: 0.8rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid white;
+  font-weight: bold;
+}
+
+.chat-window {
+  position: absolute;
+  bottom: 80px;
+  left: 0;
+  width: 320px;
+  height: 450px;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 2px solid var(--primary);
+}
+
+.chat-header {
+  background: var(--primary);
+  color: white;
+  padding: 15px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header h3 {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.5rem;
+  margin: 0;
+}
+
+.close-chat {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 15px;
+  overflow-y: auto;
+  background: #fff0f5;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.name-setup {
+  text-align: center;
+  margin-top: 50px;
+}
+
+.name-setup input {
+  width: 80%;
+  padding: 10px;
+  margin: 10px 0;
+  border: 1px solid var(--primary);
+  border-radius: 10px;
+  outline: none;
+}
+
+.name-setup button {
+  padding: 8px 20px;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.empty-chat {
+  text-align: center;
+  color: #888;
+  margin-top: 20px;
+  font-style: italic;
+}
+
+.message-bubble {
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+}
+
+.my-message {
+  align-self: flex-end;
+}
+
+.their-message {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: 10px 15px;
+  border-radius: 15px;
+  position: relative;
+  font-size: 0.95rem;
+}
+
+.my-message .message-content {
+  background: var(--primary);
+  color: #333; /* Text Hitam agar terbaca jelas */
+  border-bottom-right-radius: 2px;
+  font-weight: 500;
+}
+
+.their-message .message-content {
+  background: white;
+  color: #333; /* Text Hitam */
+  border: 1px solid #ffd1dc;
+  border-bottom-left-radius: 2px;
+  font-weight: 500;
+}
+
+.message-sender {
+  font-size: 0.7rem;
+  font-weight: bold;
+  opacity: 0.8;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.message-time {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  display: block;
+  text-align: right;
+  margin-top: 4px;
+}
+
+.chat-input-area {
+  padding: 10px;
+  background: white;
+  border-top: 1px solid #ffd1dc;
+  display: flex;
+  gap: 10px;
+}
+
+.chat-input-area input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ffd1dc;
+  border-radius: 20px;
+  outline: none;
+}
+
+.chat-input-area input:focus {
+  border-color: var(--primary);
+}
+
+.chat-input-area button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: 0.2s;
+}
+
+.chat-input-area button:hover {
+  transform: scale(1.1);
+}
+
+/* Animations */
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s ease;
+}
+
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.95);
 }
 </style>
