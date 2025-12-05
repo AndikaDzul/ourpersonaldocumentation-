@@ -1,5 +1,84 @@
 <template>
   <div class="page">
+    <!-- Pre-entry Questionnaire Overlay -->
+    <Transition name="fade">
+      <div v-if="showQuestionnaire" class="question-overlay">
+        <div class="question-box">
+          <!-- Step 1: Do you like me? -->
+          <div v-if="questionStep === 1" class="question-step">
+            <h2 class="question-title">Hai kamu! Jawab jujur ya... 🌸</h2>
+            <p class="question-text">Apakah kamu menyukaiku?<br><span class="sub-text">(Do you like me?)</span></p>
+            <div class="btn-group">
+              <button class="btn-yes" @click="nextQuestion">Suka (Yes) 💖</button>
+              <button class="btn-no" @mouseover="moveButton" @click="handleReject">Enggak (No) 😝</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Do you miss me? -->
+          <div v-else-if="questionStep === 2" class="question-step">
+            <h2 class="question-title">Aww makasih! 🥰</h2>
+            <p class="question-text">Apakah kamu sangat kangen kepadaku?<br><span class="sub-text">(Do you miss me a lot?)</span></p>
+            <div class="btn-group">
+              <button class="btn-yes" @click="nextQuestion">Kangen Banget! (Miss so much) 🥺</button>
+              <button class="btn-no" @click="handleLittleMiss">Biasa aja (Just a little) 😒</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Percentage -->
+          <div v-else-if="questionStep === 3" class="question-step">
+            <h2 class="question-title">Terakhir nih... ✨</h2>
+            <p class="question-text">Seberapa persen kamu kangen ke aku?<br><span class="sub-text">(What percentage do you miss me?)</span></p>
+            
+            <div class="slider-container">
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                v-model="missPercentage" 
+                class="heart-slider"
+              >
+              <div class="percentage-display">{{ missPercentage }}%</div>
+            </div>
+
+            <p v-if="missPercentage < 50" class="hint-text">Kok dikit banget? Tambahin dong! 😤</p>
+            <p v-if="missPercentage >= 50 && missPercentage < 100" class="hint-text">Kurang polll! 😆</p>
+            <p v-if="missPercentage == 100" class="hint-text">Nah gitu dong! I love you! 😍</p>
+
+            <button 
+              class="btn-submit" 
+              :disabled="missPercentage < 100"
+              :class="{ 'disabled': missPercentage < 100 }"
+              @click="finishQuestionnaire"
+            >
+              Kirim Jawaban (Submit) 💌
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Floating Hearts Background -->
+    <div class="floating-hearts">
+      <div v-for="n in 20" :key="n" class="heart" :style="getHeartStyle(n)">❤️</div>
+    </div>
+
+    <!-- Cursor & Click Effects -->
+    <div class="effects-container">
+      <div 
+        v-for="p in particles" 
+        :key="p.id" 
+        class="particle"
+        :style="{ 
+          left: p.x + 'px', 
+          top: p.y + 'px', 
+          fontSize: p.size + 'px',
+          opacity: p.life 
+        }"
+      >
+        {{ p.emoji }}
+      </div>
+    </div>
+
     <!-- Navbar -->
     <nav class="navbar" :class="{ 'scrolled': isScrolled }">
       <div class="brand">
@@ -15,6 +94,12 @@
     <!-- Hero -->
     <header class="hero">
       <div class="hero-bg"></div>
+      
+      <!-- 3D Animated Text -->
+      <div class="love-text-container">
+        <h1 class="love-text-3d">I Love You Baby <span class="love-icon">💖</span></h1>
+      </div>
+
       <div class="hero-content">
         <h1 class="title-animate">Our Love Story</h1>
         <p class="subtitle-animate">Dunia terasa lebih indah saat ada kamu 🌸</p>
@@ -22,6 +107,21 @@
           Lihat Kenangan Kita
         </button>
       </div>
+      
+      <!-- Animated Doll -->
+      <div class="doll-container">
+        <div v-if="showLoveBubble" class="love-bubble">
+          I Love You! 💖
+        </div>
+        <img 
+          :src="dollImage" 
+          alt="Cute Doll" 
+          class="cute-doll" 
+          @click="playDollVoice"
+          title="Klik aku!"
+        />
+      </div>
+
       <div class="scroll-indicator">
         <span>💕</span>
       </div>
@@ -34,16 +134,21 @@
           <div class="disk-center"></div>
         </div>
       </div>
-      <div class="player-info">
-        <span class="song-title">About You</span>
-        <span class="artist">The 1975</span>
+      
+      <div class="player-controls">
+        <button class="control-btn" @click="prevSong">⏮</button>
+        <button class="play-btn" @click="toggleMusic">
+          {{ isPlaying ? '⏸' : '▶' }}
+        </button>
+        <button class="control-btn" @click="nextSong">⏭</button>
       </div>
-      <button class="play-btn" @click="toggleMusic">
-        {{ isPlaying ? '⏸' : '▶' }}
-      </button>
-      <audio ref="audioPlayer" loop>
-        <source :src="bgMusic" type="audio/mp3">
-      </audio>
+
+      <div class="player-info">
+        <span class="song-title">{{ currentSong.title }}</span>
+        <span class="artist">{{ currentSong.artist }}</span>
+      </div>
+
+      <audio ref="audioPlayer" :src="currentSong.src" loop @ended="nextSong"></audio>
     </div>
 
     <!-- Galeri Foto -->
@@ -67,6 +172,40 @@
             <span class="photo-date">{{ p.date }}</span>
             <h3 class="photo-title">{{ p.title }}</h3>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Voice Note Section -->
+    <section class="section voice-note-section">
+      <div class="section-header">
+        <h2 class="section-title">Voice Note Untukmu Untuk Menyembuhkan Rasa Kangenn </h2>
+        <div class="divider"></div>
+      </div>
+      
+      <div class="voice-recorder-container">
+        <div class="recorder-controls">
+          <button 
+            class="record-btn" 
+            :class="{ 'recording': isRecording }" 
+            @click="toggleRecording"
+          >
+            <span class="mic-icon">{{ isRecording ? '⬛' : '🎤' }}</span>
+            {{ isRecording ? 'Stop Recording' : 'Rekam Pesan' }}
+          </button>
+          <p v-if="isRecording" class="recording-status">Sedang merekam... {{ recordingDuration }}s</p>
+        </div>
+
+        <div class="voice-list">
+          <div v-for="(voice, index) in voiceNotes" :key="index" class="voice-item">
+            <div class="voice-info">
+              <span class="voice-date">{{ voice.date }}</span>
+              <span class="voice-duration">{{ voice.duration }}s</span>
+            </div>
+            <audio controls :src="voice.url" class="custom-audio"></audio>
+            <button class="delete-btn" @click="deleteVoiceNote(index)">🗑️</button>
+          </div>
+          <p v-if="voiceNotes.length === 0" class="empty-state">Belum ada pesan suara. Rekam sekarang! 🎤</p>
         </div>
       </div>
     </section>
@@ -148,7 +287,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 // Assets Import
+// Assets Import
 import bgMusicFile from '../assets/The 1975 - About You (Official) - The1975VEVO.mp3'
+import dollVoiceFile from '../assets/doll_voice.mp3'
 
 // Photos
 import foto1 from '../assets/foto1.jpg'
@@ -165,6 +306,10 @@ import kita5 from '../assets/kita5.jpg'
 import kita6 from '../assets/kita6.jpg'
 import kita7 from '../assets/kita7.jpg'
 import kita13 from '../assets/kita13.jpg'
+import kita41 from '../assets/kita41.jpg'
+import kita42 from '../assets/kita42.jpg'
+import kita43 from '../assets/kita43.jpg'
+import kita44 from '../assets/kita44.jpg'
 
 // Videos
 import video8 from '../assets/kita8.mp4'
@@ -172,25 +317,41 @@ import video9 from '../assets/kita9.mp4'
 import video10 from '../assets/kita10.mp4'
 import video12 from '../assets/kita12.mp4'
 import video14 from '../assets/kita14.mp4'
+import video16 from '../assets/kita16.mp4'
+import video17 from '../assets/kita17.mp4'
+import video18 from '../assets/kita18.mp4'
+import cuteDoll from '../assets/cute_doll_transparent_1764947393310.png'
 
-const bgMusic = bgMusicFile
+const dollImage = cuteDoll
+const dollVoice = dollVoiceFile
+
+// Playlist Data
+const playlist = [
+  { title: 'About You', artist: 'The 1975', src: bgMusicFile }
+]
 
 // Data
 const photos = ref([
   { src: kita13, title: 'Spesial', date: 'Momen Kita', desc: 'Senyummu mengalihkan duniaku.' },
   { src: kita1, title: 'Awal Cerita', date: 'Day 1', desc: 'Pertemuan yang tak terlupakan.' },
   { src: kita2, title: 'Jalan-jalan', date: 'Weekend', desc: 'Menikmati hari minggu bersamamu.' },
-  { src: kita3, title: 'Sweet Moment', date: 'Date Night', desc: 'Makan malam romantis.' },
+  { src: kita3, title: 'Sweet Moment', date: 'Date Night', desc: 'Makan Ice Cream Berdua .' },
   { src: kita4, title: 'Candid', date: 'Random', desc: 'Kamu cantik apa adanya.' },
-  { src: kita5, title: 'Traveling', date: 'Holiday', desc: 'Petualangan baru dimulai.' },
+  { src: kita5, title: 'Ice cream', date: 'Holiday', desc: 'Kenapa ya hatiku dag dig dug bila deket kamu.' },
   { src: kita6, title: 'Sunset', date: 'Sore Itu', desc: 'Menunggu matahari terbenam.' },
   { src: kita7, title: 'Bahagia', date: 'Forever', desc: 'Semoga selamanya seperti ini.' },
-  { src: foto1, title: 'Estetik', date: 'Vibes', desc: 'Foto ala-ala pinterest.' },
-  { src: foto2, title: 'Warmth', date: 'Cozy', desc: 'Kehangatan di tengah hujan.' },
+  { src: foto1, title: 'Estetik', date: 'Vibes', desc: 'Ada gula ga.' },
+  { src: foto2, title: 'Warmth', date: 'Cozy', desc: 'Kamu orangnya suka ngangenin.' },
   { src: foto3, title: 'Laugh', date: 'Happy', desc: 'Tawamu canduku.' },
   { src: foto4, title: 'Together', date: 'Us', desc: 'Kita lawan dunia.' },
   { src: foto5, title: 'Dream', date: 'Future', desc: 'Mimpi-mimpi kita.' },
   { src: foto6, title: 'Memory', date: 'Throwback', desc: 'Mengingat masa lalu.' },
+    { src: kita41, title: 'Beach', date: 'Beautiful', desc: 'Kenangan ketika di maliboro Yogyakarta.' },
+    { src: kita42, title: 'Beach', date: 'Beautiful', desc: 'Kenangan ketika di maliboro Yogyakarta.' },
+        { src: kita43, title: 'Baybe', date: 'Happy', desc: 'Kenangan ketika di maliboro Yogyakarta sore ituu.' },
+                { src: kita44, title: 'Romance ', date: 'Us', desc: 'Lucu banget deh kita berdua awww.' },
+        
+  
 ])
 
 const videos = ref([
@@ -199,6 +360,9 @@ const videos = ref([
   { src: video10, title: 'Trip Singkat', desc: 'Jalan-jalan dadakan.' },
   { src: video12, title: 'Anniversary', desc: 'Merayakan hari jadi kita.' },
   { src: video14, title: 'Anniversary', desc: 'Hal Random.' },
+    { src: video16, title: 'Anniversary', desc: 'Jalan jalan dengan pacar.' },
+      { src: video17, title: 'Anniversary', desc: 'Jalan jalan dengan pacar.' },
+        { src: video18, title: 'Tiktok Bareng', desc: 'Iseng-iseng berhadiah.' },
 ])
 
 const trending = ref([
@@ -208,12 +372,53 @@ const trending = ref([
 ])
 
 // State
+const showQuestionnaire = ref(true)
+const questionStep = ref(1)
+const missPercentage = ref(50)
+
+// Questionnaire Logic
+const nextQuestion = () => {
+  questionStep.value++
+}
+
+const handleReject = () => {
+  alert("Eits gaboleh nolak! Harus suka dong! 😤")
+}
+
+const moveButton = (e) => {
+  const btn = e.target
+  const x = Math.random() * (window.innerWidth - btn.offsetWidth)
+  const y = Math.random() * (window.innerHeight - btn.offsetHeight)
+  
+  // Make sure it doesn't go off screen
+  btn.style.position = 'fixed'
+  btn.style.left = `${Math.max(0, Math.min(x, window.innerWidth - 100))}px`
+  btn.style.top = `${Math.max(0, Math.min(y, window.innerHeight - 50))}px`
+}
+
+const handleLittleMiss = () => {
+  alert("Parah banget masa cuma biasa aja! 😭 Ulangi!")
+}
+
+const finishQuestionnaire = () => {
+  showQuestionnaire.value = false
+  // Play music automatically when entering
+  setTimeout(() => {
+    toggleMusic()
+    playDollVoice()
+  }, 500)
+}
+
 const isScrolled = ref(false)
 const isPlaying = ref(false)
 const audioPlayer = ref(null)
 const lightboxOpen = ref(false)
 const currentIdx = ref(0)
 const activeSource = ref('photos') // 'photos' | 'trending'
+
+// Music State
+const currentSongIndex = ref(0)
+const currentSong = computed(() => playlist[currentSongIndex.value])
 
 // Scroll Handler
 const handleScroll = () => {
@@ -222,6 +427,7 @@ const handleScroll = () => {
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
+  loadVoiceNotes()
 })
 
 onUnmounted(() => {
@@ -237,6 +443,27 @@ const toggleMusic = () => {
     audioPlayer.value.play().catch(e => console.log('Autoplay prevented', e))
   }
   isPlaying.value = !isPlaying.value
+}
+
+const nextSong = () => {
+  currentSongIndex.value = (currentSongIndex.value + 1) % playlist.length
+  isPlaying.value = false // Reset play state to trigger auto-play logic if needed, or just let watcher handle it
+  setTimeout(() => {
+    if (audioPlayer.value) {
+      audioPlayer.value.play()
+      isPlaying.value = true
+    }
+  }, 100)
+}
+
+const prevSong = () => {
+  currentSongIndex.value = (currentSongIndex.value - 1 + playlist.length) % playlist.length
+  setTimeout(() => {
+    if (audioPlayer.value) {
+      audioPlayer.value.play()
+      isPlaying.value = true
+    }
+  }, 100)
 }
 
 // Navigation
@@ -259,6 +486,10 @@ const activeList = computed(() => activeSource.value === 'photos' ? photos.value
 const activeImage = computed(() => activeList.value[currentIdx.value] || {})
 
 const openLightbox = (index, source) => {
+  // Play love sound
+  const audio = new Audio(dollVoice)
+  audio.play().catch(e => console.log('Error playing sound:', e))
+
   activeSource.value = source
   currentIdx.value = index
   lightboxOpen.value = true
@@ -276,6 +507,173 @@ const nextImage = () => {
 
 const prevImage = () => {
   currentIdx.value = (currentIdx.value - 1 + activeList.value.length) % activeList.value.length
+}
+
+// Voice Note Logic
+const isRecording = ref(false)
+const mediaRecorder = ref(null)
+const audioChunks = ref([])
+const voiceNotes = ref([])
+const recordingDuration = ref(0)
+let recordingTimer = null
+
+// IndexedDB Helper
+const dbName = 'BucinDB'
+const storeName = 'voiceNotes'
+
+const openDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(dbName, 1)
+    request.onerror = (event) => reject('DB Error: ' + event.target.error)
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result
+      if (!db.objectStoreNames.contains(storeName)) {
+        db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true })
+      }
+    }
+    request.onsuccess = (event) => resolve(event.target.result)
+  })
+}
+
+const loadVoiceNotes = async () => {
+  try {
+    const db = await openDB()
+    const tx = db.transaction(storeName, 'readonly')
+    const store = tx.objectStore(storeName)
+    const request = store.getAll()
+    
+    request.onsuccess = () => {
+      // Convert stored Blobs to URLs
+      voiceNotes.value = request.result.map(note => ({
+        ...note,
+        url: URL.createObjectURL(note.blob)
+      })).reverse() // Show newest first
+    }
+  } catch (error) {
+    console.error('Error loading voice notes:', error)
+  }
+}
+
+const saveVoiceNoteToDB = async (note) => {
+  try {
+    const db = await openDB()
+    const tx = db.transaction(storeName, 'readwrite')
+    const store = tx.objectStore(storeName)
+    store.add(note)
+  } catch (error) {
+    console.error('Error saving voice note:', error)
+  }
+}
+
+const deleteVoiceNoteFromDB = async (id) => {
+  try {
+    const db = await openDB()
+    const tx = db.transaction(storeName, 'readwrite')
+    const store = tx.objectStore(storeName)
+    store.delete(id)
+  } catch (error) {
+    console.error('Error deleting voice note:', error)
+  }
+}
+
+const toggleRecording = async () => {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    await startRecording()
+  }
+}
+
+const startRecording = async () => {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaRecorder.value = new MediaRecorder(stream)
+    audioChunks.value = []
+
+    mediaRecorder.value.ondataavailable = (event) => {
+      audioChunks.value.push(event.data)
+    }
+
+    mediaRecorder.value.onstop = async () => {
+      const audioBlob = new Blob(audioChunks.value, { type: 'audio/mp3' })
+      const now = new Date()
+      
+      const newNote = {
+        blob: audioBlob,
+        date: now.toLocaleDateString() + ' ' + now.toLocaleTimeString(),
+        duration: recordingDuration.value
+      }
+      
+      // Save to DB
+      await saveVoiceNoteToDB(newNote)
+      
+      // Reload to update UI
+      loadVoiceNotes()
+      
+      recordingDuration.value = 0
+    }
+
+    mediaRecorder.value.start()
+    isRecording.value = true
+    
+    recordingTimer = setInterval(() => {
+      recordingDuration.value++
+    }, 1000)
+
+  } catch (error) {
+    console.error('Error accessing microphone:', error)
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      alert('Gagal mengakses mikrofon! 🎤\n\nPENTING: Fitur Voice Note hanya bisa digunakan di "localhost" atau website yang menggunakan HTTPS (gembok hijau).\n\nJika kamu membuka ini di HP lewat IP address (contoh: 192.168...), browser akan memblokir mikrofon demi keamanan.')
+    } else {
+      alert('Maaf, tidak bisa mengakses mikrofon. Pastikan izin diberikan di pengaturan browser kamu. 🎤')
+    }
+  }
+}
+
+const stopRecording = () => {
+  if (mediaRecorder.value && isRecording.value) {
+    mediaRecorder.value.stop()
+    isRecording.value = false
+    clearInterval(recordingTimer)
+    
+    // Stop all tracks to release microphone
+    mediaRecorder.value.stream.getTracks().forEach(track => track.stop())
+  }
+}
+
+const deleteVoiceNote = async (index) => {
+  const note = voiceNotes.value[index]
+  if (note.id) {
+    await deleteVoiceNoteFromDB(note.id)
+    voiceNotes.value.splice(index, 1)
+  }
+}
+
+// Floating Hearts Logic
+const getHeartStyle = () => {
+  const delay = Math.random() * 5
+  const duration = 5 + Math.random() * 5
+  const left = Math.random() * 100
+  const size = 10 + Math.random() * 20
+  
+  return {
+    left: `${left}%`,
+    animationDelay: `${delay}s`,
+    animationDuration: `${duration}s`,
+    fontSize: `${size}px`
+  }
+}
+
+const showLoveBubble = ref(false)
+
+const playDollVoice = () => {
+  const audio = new Audio(dollVoice)
+  audio.play().catch(e => console.log('Error playing doll voice:', e))
+  
+  showLoveBubble.value = true
+  setTimeout(() => {
+    showLoveBubble.value = false
+  }, 3000)
 }
 </script>
 
@@ -299,6 +697,150 @@ const prevImage = () => {
   font-family: 'Outfit', sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
+}
+
+/* Questionnaire Overlay */
+.question-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 183, 206, 0.95);
+  backdrop-filter: blur(10px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.question-box {
+  background: white;
+  padding: 40px;
+  border-radius: 30px;
+  box-shadow: 0 20px 60px rgba(255, 77, 136, 0.3);
+  text-align: center;
+  max-width: 500px;
+  width: 100%;
+  border: 4px solid #fff;
+  outline: 4px solid var(--primary);
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.question-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: 2.5rem;
+  color: var(--primary);
+  margin-bottom: 20px;
+}
+
+.question-text {
+  font-size: 1.4rem;
+  color: var(--text);
+  margin-bottom: 30px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.sub-text {
+  font-size: 1rem;
+  font-weight: 400;
+  color: #888;
+  display: block;
+  margin-top: 5px;
+}
+
+.btn-group {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.btn-yes, .btn-no, .btn-submit {
+  padding: 12px 30px;
+  border: none;
+  border-radius: 50px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+  font-family: 'Outfit', sans-serif;
+}
+
+.btn-yes {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 5px 15px rgba(255, 133, 162, 0.4);
+}
+
+.btn-yes:hover, .btn-submit:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 133, 162, 0.6);
+}
+
+.btn-no {
+  background: #f0f0f0;
+  color: #666;
+}
+
+.btn-submit {
+  background: linear-gradient(45deg, var(--primary), #ff9a9e);
+  color: white;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.btn-submit.disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Slider Styling */
+.slider-container {
+  margin: 30px 0;
+}
+
+.heart-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 15px;
+  border-radius: 10px;
+  background: #ffd1dc;
+  outline: none;
+  opacity: 0.7;
+  transition: .2s;
+}
+
+.heart-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 35px;
+  height: 35px;
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ff4d88'><path d='M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'/></svg>") no-repeat center center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.heart-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.percentage-display {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-top: 10px;
+  font-family: 'Dancing Script', cursive;
+}
+
+.hint-text {
+  font-size: 0.9rem;
+  color: #ff4d88;
+  margin-top: -15px;
+  margin-bottom: 20px;
+  font-weight: 600;
+  animation: bounce 1s infinite;
 }
 
 /* Navbar */
@@ -491,12 +1033,28 @@ const prevImage = () => {
 .artist {
   color: var(--text);
 }
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.control-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: var(--primary);
+  transition: 0.2s;
+}
+.control-btn:hover {
+  transform: scale(1.2);
+}
 .play-btn {
   background: var(--primary);
   border: none;
   color: white;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   cursor: pointer;
   display: flex;
@@ -504,6 +1062,7 @@ const prevImage = () => {
   justify-content: center;
   transition: 0.2s;
   box-shadow: 0 4px 10px rgba(255, 133, 162, 0.3);
+  font-size: 1.2rem;
 }
 .play-btn:hover {
   transform: scale(1.1);
@@ -779,6 +1338,129 @@ const prevImage = () => {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* 3D Text Animation */
+.love-text-container {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  text-align: center;
+  animation: floatDown 3s ease-in-out infinite alternate;
+}
+
+.love-text-3d {
+  font-family: 'Dancing Script', cursive;
+  font-size: 4rem;
+  color: #ff4d88;
+  text-shadow: 
+    0 1px 0 #ccc,
+    0 2px 0 #c9c9c9,
+    0 3px 0 #bbb,
+    0 4px 0 #b9b9b9,
+    0 5px 0 #aaa,
+    0 6px 1px rgba(0,0,0,.1),
+    0 0 5px rgba(0,0,0,.1),
+    0 1px 3px rgba(0,0,0,.3),
+    0 3px 5px rgba(0,0,0,.2),
+    0 5px 10px rgba(0,0,0,.25),
+    0 10px 10px rgba(0,0,0,.2),
+    0 20px 20px rgba(0,0,0,.15);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.love-icon {
+  font-size: 3rem;
+  display: block;
+  animation: beat 1s infinite;
+  margin-top: 10px;
+}
+
+@keyframes floatDown {
+  0% { transform: translateX(-50%) translateY(0); }
+  100% { transform: translateX(-50%) translateY(20px); }
+}
+
+/* Doll Animation */
+.doll-container {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  z-index: 5;
+}
+
+.cute-doll {
+  width: 150px;
+  height: auto;
+  animation: peek 5s infinite;
+  filter: drop-shadow(0 5px 15px rgba(0,0,0,0.2));
+  cursor: pointer;
+  transition: 0.3s;
+}
+.cute-doll:active {
+  transform: scale(0.9) rotate(-10deg);
+}
+
+.love-bubble {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.5rem;
+  color: var(--primary);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  white-space: nowrap;
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.love-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 10px 10px 0;
+  border-style: solid;
+  border-color: white transparent transparent transparent;
+}
+
+@keyframes popIn {
+  from { transform: translateX(-50%) scale(0); opacity: 0; }
+  to { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
+@keyframes peek {
+  0%, 100% { transform: rotate(-5deg) translateY(0); }
+  50% { transform: rotate(5deg) translateY(-10px); }
+}
+
+/* Floating Hearts */
+.floating-hearts {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.heart {
+  position: absolute;
+  bottom: -50px;
+  opacity: 0;
+  animation: floatUp linear infinite;
+}
+
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(0.5); opacity: 0; }
+  10% { opacity: 0.8; }
+  100% { transform: translateY(-110vh) scale(1.2); opacity: 0; }
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .title-animate { font-size: 3rem; }
@@ -787,5 +1469,7 @@ const prevImage = () => {
   .music-player { bottom: 20px; right: 20px; padding: 10px 15px; }
   .disk-wrapper { display: none; }
   .story-text { font-size: 1.2rem; }
+  .love-text-3d { font-size: 2.5rem; }
+  .cute-doll { width: 100px; bottom: 80px; }
 }
 </style>
