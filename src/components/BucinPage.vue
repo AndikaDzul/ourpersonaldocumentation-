@@ -127,6 +127,54 @@
       </div>
     </header>
 
+    <!-- NEW: 3D Love Wall Animation -->
+    <section class="section threed-section">
+      <!-- 3D Container -->
+      <div class="love-wall-container">
+        <div class="love-wall">
+          <!-- Looping Rows -->
+          <div v-for="row in 20" :key="'row-'+row" class="wall-row" :class="{'even': row % 2 === 0}">
+            <span class="wall-text">I LOVE YOU BABYY 💖</span>
+            <div v-if="row % 3 === 0" class="wall-photo-frame">
+              <img :src="photos[row % photos.length].src" alt="Love" />
+            </div>
+            <span class="wall-text">MWAHHH 💋</span>
+            <div v-if="row % 4 === 0" class="wall-photo-frame">
+              <img :src="photos[(row + 2) % photos.length].src" alt="Love" />
+            </div>
+            <span class="wall-text">FOREVER ❤️</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NEW: 3D Galaxy/Planet Section -->
+    <section class="section galaxy-section" @mousemove="handleGalaxyMove" @wheel="handleGalaxyZoom">
+      <div class="galaxy-scene" :style="galaxyStyle">
+        <!-- Center Planet -->
+        <div class="planet">
+          <div class="planet-body"></div>
+          <div class="planet-ring">
+            <span>Kamu orang special,kamu duniakuu</span>
+          </div>
+        </div>
+
+        <!-- Floating Photos -->
+        <div 
+          v-for="(photo, i) in starPhotos" 
+          :key="'star-'+i" 
+          class="star-photo"
+          :style="photo.style"
+        >
+          <img :src="photo.src" loading="lazy" />
+        </div>
+      </div>
+      
+      <div class="galaxy-controls">
+        <p>Gunakan Mouse/Scroll untuk Zoom & Putar 🌍✨</p>
+      </div>
+    </section>
+
     <!-- Music Player -->
     <div class="music-player" :class="{ 'playing': isPlaying }">
       <div class="disk-wrapper">
@@ -252,8 +300,11 @@
       <div class="story-container">
         <h2 class="section-title">Cerita Kita</h2>
         <p class="story-text">
-          "Terima kasih sudah mewarnai hari-hariku dengan warna pink yang indah. 
-          Kamu adalah alasan kenapa aku selalu tersenyum setiap hari. I Love You! 💖"
+          "Sayang, kalau aku bisa memutar waktu, aku akan mencarimu lebih awal, supaya aku bisa mencintaimu lebih lama. Terima kasih sudah hadir dan mengubah duniaku yang biasa saja menjadi luar biasa. Kamu bukan hanya sekadar pasangan, tapi rumah ternyaman tempatku pulang. 
+          
+          Di setiap tawa kita, di setiap tatapan matamu, aku menemukan alasan kenapa aku harus bersyukur setiap bangun tidur. Mungkin aku nggak sempurna, aku banyak kurangnya, tapi satu hal yang pasti: cintaku ke kamu itu tulus dan nggak akan pernah pudar. 
+          
+          Terima kasih sudah menerima aku apa adanya, sudah sabar menghadapiku. Aku janji akan terus berusaha membahagiakanmu, karena senyummu adalah duniaku. I love you more than words can say. Selamanya. ❤️"
         </p>
       </div>
     </section>
@@ -280,59 +331,31 @@
         </div>
       </div>
     </Transition>
-    <!-- Cloud Chat Widget -->
-    <div class="chat-widget">
-      <button class="chat-toggle-btn" @click="toggleChat">
-        <span class="chat-icon">💬</span>
-        <span v-if="unreadCount > 0" class="unread-badge">{{ unreadCount }}</span>
-      </button>
-
-      <Transition name="slide-up">
-        <div v-if="isChatOpen" class="chat-window">
-          <div class="chat-header">
-            <h3>Obrolan Kita 💑</h3>
-            <button class="close-chat" @click="toggleChat">✕</button>
-          </div>
+    <!-- WhatsApp Voice Note Modal -->
+    <Transition name="fade">
+      <div v-if="showWAModal" class="modal-overlay">
+        <div class="modal-box">
+          <h3>Kirim Voice Note ke Siapa? 📲</h3>
+          <p>Pilih nomor WhatsApp tujuan:</p>
           
-          <div class="chat-messages" ref="chatContainer">
-            <div v-if="!userName" class="name-setup">
-              <p>Siapa nama kamu sayang?</p>
-              <input v-model="tempName" @keyup.enter="saveName" placeholder="Tulis namamu..." />
-              <button @click="saveName">Masuk Chat</button>
-            </div>
+          <input 
+            v-model="waMessage" 
+            placeholder="Ketik pesan tambahan (misal: Sayang kangen...)" 
+            class="wa-input"
+          />
 
-            <template v-else>
-               <div v-if="chatMessages.length === 0" class="empty-chat">
-                Belum ada pesan. Mulai ngobrol yuk! 👋
-              </div>
-              <div 
-                v-for="msg in chatMessages" 
-                :key="msg.id" 
-                class="message-bubble"
-                :class="{ 'my-message': msg.sender === userName, 'their-message': msg.sender !== userName }"
-              >
-                <div class="message-content">
-                  <span class="message-sender">{{ msg.sender }}</span>
-                  <p>{{ msg.text }}</p>
-                  <span class="message-time">{{ formatTime(msg.createdAt) }}</span>
-                </div>
-              </div>
-            </template>
-          </div>
-
-          <div v-if="userName" class="chat-input-area">
-            <input 
-              v-model="newMessage" 
-              @keyup.enter="sendMessage"
-              placeholder="Ketik pesan sayang..." 
-            />
-            <button @click="sendMessage">
-              <span class="send-icon">🚀</span>
+          <div class="btn-group-vertical">
+            <button class="btn-wa" @click="sendToWA('6281322233928')">
+              Nomor 1 (0813-2223-3928)
             </button>
+            <button class="btn-wa" @click="sendToWA('6281928615681')">
+              Nomor 2 (0819-2861-5681)
+            </button>
+            <button class="btn-cancel" @click="showWAModal = false">Batalkan</button>
           </div>
         </div>
-      </Transition>
-    </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -340,10 +363,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 // Firebase Imports
-// Firebase Imports
-import { storage, db } from '../firebase'
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
-import { collection, addDoc, deleteDoc, doc, query, orderBy, serverTimestamp, onSnapshot, limit } from "firebase/firestore"
+// Socket.io for Realtime MongoDB
+import { io } from "socket.io-client";
+
+// GANTI URL INI dengan URL dari Localtunnel (HTTPS) agar bisa dibuka di HP
+// Contoh: "https://purple-cat-22.loca.lt"
+const BACKEND_URL = "http://localhost:3000"; 
+
+const socket = io(BACKEND_URL);
 
 // Assets Import
 // Assets Import
@@ -489,7 +516,6 @@ const handleScroll = () => {
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
   loadVoiceNotes()
-  initChat()
 })
 
 onUnmounted(() => {
@@ -580,66 +606,61 @@ const recordingDuration = ref(0)
 let recordingTimer = null
 
 const loadVoiceNotes = async () => {
-  if (!db) return
-  // Gunakan onSnapshot untuk Real-time Updates (Bisa lihat suara orang lain langsung)
-  const q = query(collection(db, "voiceNotes"), orderBy("createdAt", "desc"));
-  
-  onSnapshot(q, (snapshot) => {
-    voiceNotes.value = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
+  // Initial load handled by socket listener below
+  socket.on("init_voicenotes", (notes) => {
+    voiceNotes.value = notes.map(n => ({
+      ...n,
+      id: n._id, // Mongo uses _id
+      url: n.audioData // Base64 data url
     }));
-  }, (error) => {
-    console.error("Error loading voice notes:", error);
+  });
+
+  socket.on("new_voicenote", (note) => {
+    voiceNotes.value.unshift({ // Add to top
+      ...note,
+      id: note._id,
+      url: note.audioData
+    });
+  });
+
+  socket.on("deleted_voicenote", (id) => {
+    voiceNotes.value = voiceNotes.value.filter(n => n.id !== id && n._id !== id);
+  });
+}
+
+// Helper: Blob to Base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
   });
 }
 
 const saveVoiceNoteToDB = async (audioBlob, duration) => {
-  if (!storage || !db) {
-    alert("⚠️ FITUR BELUM DI-CONFIG! \n\nAgar pesan suara bisa tersimpan online, kamu harus setting 'src/firebase.js' dulu ya! \n(Cek file tersebut untuk caranya)");
-    return false;
-  }
-
   try {
-    const filename = `voicenotes/${Date.now()}.mp3`;
-    const audioRef = storageRef(storage, filename);
+    const base64Data = await blobToBase64(audioBlob);
     
-    // Upload Blob
-    await uploadBytes(audioRef, audioBlob);
-    const downloadURL = await getDownloadURL(audioRef);
-    
-    // Save Metadata to Firestore
-    await addDoc(collection(db, "voiceNotes"), {
-      url: downloadURL,
-      storagePath: filename,
+    // Kirim ke server via Socket
+    socket.emit("send_voicenote", {
+      audioData: base64Data,
       duration: duration,
-      date: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      createdAt: serverTimestamp()
+      date: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
     });
     
-    return true;
+    return true; /* Return true to indicate success */
   } catch (error) {
     console.error("Error saving voice note:", error);
-    alert("Gagal menyimpan: " + error.code);
+    alert("Gagal menyimpan server offline?");
     return false;
   }
 }
 
 const deleteVoiceNoteFromDB = async (note) => {
-  if (!db || !storage) return;
-  try {
-    // Delete from Firestore
-    await deleteDoc(doc(db, "voiceNotes", note.id));
-    
-    // Delete from Storage
-    if (note.storagePath) {
-      const fileRef = storageRef(storage, note.storagePath);
-      await deleteObject(fileRef);
-    }
-  } catch (error) {
-    console.error("Error deleting:", error);
-    alert("Gagal menghapus: " + error.message);
-  }
+  if (!socket) return;
+  const id = note.id || note._id;
+  socket.emit("delete_voicenote", id);
 }
 
 const toggleRecording = async () => {
@@ -663,11 +684,11 @@ const startRecording = async () => {
     mediaRecorder.value.onstop = async () => {
       const audioBlob = new Blob(audioChunks.value, { type: 'audio/mp3' })
       
-      // Save directly to Firebase
       const success = await saveVoiceNoteToDB(audioBlob, recordingDuration.value)
       
       if (success) {
-        // loadVoiceNotes() // Tidak perlu dipanggil manual lagi karena sudah pakai onSnapshot
+        // Tampilkan Modal WA
+        showWAModal.value = true;
       }
       
       recordingDuration.value = 0
@@ -735,82 +756,92 @@ const playDollVoice = () => {
   }, 3000)
 }
 
-// Chat Logic
-const isChatOpen = ref(false)
-const chatMessages = ref([])
-const newMessage = ref('')
-const userName = ref(localStorage.getItem('bucin_username') || '')
-const tempName = ref('')
-const unreadCount = ref(0)
-const chatContainer = ref(null)
 
-const toggleChat = () => {
-  isChatOpen.value = !isChatOpen.value
-  if (isChatOpen.value) {
-    unreadCount.value = 0
-    scrollToBottom()
+
+// WhatsApp Logic
+const showWAModal = ref(false)
+const latestNoteId = ref(null)
+const waMessage = ref('')
+
+// Tangkap ID note baru dari socket agar bisa dikirim link-nya
+socket.on("new_voicenote", (note) => {
+  latestNoteId.value = note._id; // Simpan ID terakhir
+  voiceNotes.value.unshift({ 
+    ...note,
+    id: note._id,
+    url: note.audioData
+  });
+});
+
+const sendToWA = (number) => {
+  if (!latestNoteId.value) {
+    alert("Tunggu sebentar, voice note sedang diproses...");
+    return;
   }
-}
-
-const saveName = () => {
-  if (tempName.value.trim()) {
-    userName.value = tempName.value.trim()
-    localStorage.setItem('bucin_username', userName.value)
-  }
-}
-
-const initChat = () => {
-  if (!db) return
-
-  const q = query(collection(db, "chats"), orderBy("createdAt", "asc"), limit(100))
   
-  onSnapshot(q, (snapshot) => {
-    const msgs = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }))
-    
-    chatMessages.value = msgs
-    
-    if (!isChatOpen.value && msgs.length > 0) {
-      // Simple logic: if new message comes and chat is closed, increment badge
-      // In real app we compare IDs, but here just simple visual cue
-      unreadCount.value++
-    }
-    
-    scrollToBottom()
-  })
+  // Gunakan URL server yang sudah disetting di atas
+  const link = `${BACKEND_URL}/voice/${latestNoteId.value}`;
+  
+  // Gabungkan Link + Pesan Tambahan
+  const text = `${link}\n\n${waMessage.value}`;
+  const url = `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
+  
+  window.open(url, '_blank');
+  showWAModal.value = false;
+  waMessage.value = ''; // Reset pesan
 }
 
-const sendMessage = async () => {
-  if (!newMessage.value.trim() || !db) return
+// --- Galaxy 3D Logic ---
+const starPhotos = ref([])
+const galaxyRotate = ref({ x: 0, y: 0 })
+const galaxyZoom = ref(-500) // Initial Zoom (far enough to see everything)
 
-  try {
-    await addDoc(collection(db, "chats"), {
-      text: newMessage.value.trim(),
-      sender: userName.value,
-      createdAt: serverTimestamp()
-    })
-    newMessage.value = ''
-    scrollToBottom()
-  } catch (error) {
-    console.error("Error sending message:", error)
+onMounted(() => {
+  // Generate many photos for the galaxy (duplicate existing photos)
+  const allPhotos = [...photos.value, ...photos.value, ...photos.value, ...photos.value] // x4 amount
+  
+  starPhotos.value = allPhotos.map(p => {
+    // Spherical Distribution
+    const theta = Math.random() * 2 * Math.PI; // Random angle around
+    const phi = Math.acos((Math.random() * 2) - 1); // Random angle up/down
+    const radius = 600 + Math.random() * 400; // Distance from center (600px - 1000px)
+
+    const x = radius * Math.sin(phi) * Math.cos(theta);
+    const y = radius * Math.sin(phi) * Math.sin(theta);
+    const z = radius * Math.cos(phi);
+
+    return {
+      src: p.src,
+      style: {
+        transform: `translate3d(${x}px, ${y}px, ${z}px)`,
+        animationDelay: `${Math.random() * 5}s`
+      }
+    }
+  })
+})
+
+const galaxyStyle = computed(() => {
+  return {
+    transform: `translateZ(${galaxyZoom.value}px) rotateY(${galaxyRotate.value.y}deg) rotateX(${galaxyRotate.value.x}deg)`
+  }
+})
+
+const handleGalaxyMove = (e) => {
+  const x = (e.clientX / window.innerWidth - 0.5) * 2
+  const y = (e.clientY / window.innerHeight - 0.5) * 2
+  
+  galaxyRotate.value = {
+    x: -y * 20, // Rotate X based on mouse Y
+    y: x * 50   // Rotate Y based on mouse X
   }
 }
 
-const scrollToBottom = () => {
-  setTimeout(() => {
-    if (chatContainer.value) {
-      chatContainer.value.scrollTop = chatContainer.value.scrollHeight
-    }
-  }, 100)
-}
-
-const formatTime = (timestamp) => {
-  if (!timestamp) return ''
-  // Handle Firestore Timestamp or Date object
-  const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+const handleGalaxyZoom = (e) => {
+  // Simple zoom limitation
+  const newZoom = galaxyZoom.value - e.deltaY * 0.5
+  if (newZoom < -2000) galaxyZoom.value = -2000
+  else if (newZoom > 500) galaxyZoom.value = 500
+  else galaxyZoom.value = newZoom
 }
 </script>
 
@@ -1608,233 +1639,279 @@ const formatTime = (timestamp) => {
   .story-text { font-size: 1.2rem; }
   .love-text-3d { font-size: 2.5rem; }
   .cute-doll { width: 100px; bottom: 80px; }
-  .chat-window { width: 90%; right: 5%; bottom: 90px; }
 }
-
-/* Chat Widget Styles */
-.chat-widget {
+/* WA Modal Styles */
+.modal-overlay {
   position: fixed;
-  bottom: 30px;
-  left: 30px;
-  z-index: 2000;
-}
-
-.chat-toggle-btn {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  border: none;
-  background: linear-gradient(45deg, var(--primary), #ff4d88);
-  color: white;
-  font-size: 1.8rem;
-  cursor: pointer;
-  box-shadow: 0 5px 15px rgba(255, 77, 136, 0.4);
-  transition: 0.3s;
-  position: relative;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 9999;
 }
 
-.chat-toggle-btn:hover {
-  transform: scale(1.1);
-}
-
-.unread-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: red;
-  color: white;
-  font-size: 0.8rem;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid white;
-  font-weight: bold;
-}
-
-.chat-window {
-  position: absolute;
-  bottom: 80px;
-  left: 0;
-  width: 320px;
-  height: 450px;
+.modal-box {
   background: white;
+  padding: 30px;
   border-radius: 20px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  text-align: center;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.btn-group-vertical {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 2px solid var(--primary);
-}
-
-.chat-header {
-  background: var(--primary);
-  color: white;
-  padding: 15px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.chat-header h3 {
-  font-family: 'Dancing Script', cursive;
-  font-size: 1.5rem;
-  margin: 0;
-}
-
-.close-chat {
-  background: transparent;
-  border: none;
-  color: white;
-  font-size: 1.2rem;
-  cursor: pointer;
-}
-
-.chat-messages {
-  flex: 1;
-  padding: 15px;
-  overflow-y: auto;
-  background: #fff0f5;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.name-setup {
-  text-align: center;
-  margin-top: 50px;
-}
-
-.name-setup input {
-  width: 80%;
-  padding: 10px;
-  margin: 10px 0;
-  border: 1px solid var(--primary);
-  border-radius: 10px;
-  outline: none;
-}
-
-.name-setup button {
-  padding: 8px 20px;
-  background: var(--primary);
-  color: white;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-}
-
-.empty-chat {
-  text-align: center;
-  color: #888;
+  gap: 15px;
   margin-top: 20px;
-  font-style: italic;
 }
 
-.message-bubble {
-  max-width: 80%;
-  display: flex;
-  flex-direction: column;
-}
-
-.my-message {
-  align-self: flex-end;
-}
-
-.their-message {
-  align-self: flex-start;
-}
-
-.message-content {
-  padding: 10px 15px;
-  border-radius: 15px;
-  position: relative;
-  font-size: 0.95rem;
-}
-
-.my-message .message-content {
-  background: var(--primary);
-  color: #333; /* Text Hitam agar terbaca jelas */
-  border-bottom-right-radius: 2px;
-  font-weight: 500;
-}
-
-.their-message .message-content {
-  background: white;
-  color: #333; /* Text Hitam */
-  border: 1px solid #ffd1dc;
-  border-bottom-left-radius: 2px;
-  font-weight: 500;
-}
-
-.message-sender {
-  font-size: 0.7rem;
-  font-weight: bold;
-  opacity: 0.8;
-  display: block;
-  margin-bottom: 2px;
-}
-
-.message-time {
-  font-size: 0.65rem;
-  opacity: 0.7;
-  display: block;
-  text-align: right;
-  margin-top: 4px;
-}
-
-.chat-input-area {
-  padding: 10px;
-  background: white;
-  border-top: 1px solid #ffd1dc;
-  display: flex;
-  gap: 10px;
-}
-
-.chat-input-area input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ffd1dc;
-  border-radius: 20px;
-  outline: none;
-}
-
-.chat-input-area input:focus {
-  border-color: var(--primary);
-}
-
-.chat-input-area button {
-  background: var(--primary);
+.btn-wa {
+  background: #25D366;
   color: white;
+  padding: 12px;
   border: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
+  border-radius: 50px;
+  font-weight: bold;
   cursor: pointer;
-  font-size: 1.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-size: 1rem;
   transition: 0.2s;
 }
 
-.chat-input-area button:hover {
-  transform: scale(1.1);
+.btn-wa:hover {
+  background: #128C7E;
+  transform: scale(1.05);
+}
+
+.btn-cancel {
+  background: #f0f0f0;
+  color: #666;
+  padding: 10px;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+}
+
+.wa-input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #ddd;
+  border-radius: 15px;
+  margin: 15px 0;
+  font-family: inherit;
+  outline: none;
+  transition: 0.3s;
+}
+
+.wa-input:focus {
+  border-color: #25D366;
+  box-shadow: 0 0 10px rgba(37, 211, 102, 0.2);
+}
+
+/* 3D Love Wall Styles */
+.threed-section {
+  position: relative;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
+}
+
+.love-wall-container {
+  width: 100%;
+  height: 120%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: rotateX(20deg) scale(1.2); /* Miringkan agar terlihat 3D */
+}
+
+.love-wall {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30px;
+  animation: scrollDown 20s linear infinite;
+  width: 100%;
+}
+
+.wall-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  white-space: nowrap;
+  width: 200%; /* Lebar ekstra untuk scrolling horizontal jika mau */
+}
+
+.wall-row.even {
+  transform: translateX(-50px);
+}
+
+.wall-text {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 900;
+  font-size: 3rem;
+  color: transparent;
+  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.8);
+  text-shadow: 0 0 10px rgba(255, 77, 136, 0.5);
+  font-style: italic;
+  letter-spacing: 2px;
+}
+
+.wall-photo-frame {
+  width: 150px;
+  height: 200px;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 4px solid white;
+  box-shadow: 0 0 20px rgba(255, 77, 136, 0.8);
+  transform: rotate(5deg);
+}
+
+.wall-photo-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.even .wall-photo-frame {
+  transform: rotate(-5deg);
+}
+
+@keyframes scrollDown {
+  0% { transform: translateY(-50%); }
+  100% { transform: translateY(0%); }
+}
+
+/* Responsive 3D */
+@media (max-width: 768px) {
+  .wall-text { font-size: 1.5rem; -webkit-text-stroke: 1px rgba(255, 255, 255, 0.8); }
+  .wall-photo-frame { width: 100px; height: 140px; }
+  .threed-section { height: 60vh; }
+}
+/* Galaxy Section */
+.galaxy-section {
+  height: 100vh;
+  background: radial-gradient(circle at center, #1a0b14 0%, #000000 100%);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  perspective: 1500px;
+  position: relative;
+  cursor: grab;
+}
+
+.galaxy-scene {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  transform-style: preserve-3d;
+  transition: transform 0.1s ease-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Planet */
+.planet {
+  position: absolute;
+  transform-style: preserve-3d;
+  animation: spinPlanet 20s linear infinite;
+}
+
+.planet-body {
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle at 30% 30%, #ff85a2, #ff4d88, #5e2a40);
+  border-radius: 50%;
+  box-shadow: 0 0 50px rgba(255, 77, 136, 0.8), inset -20px -20px 50px rgba(0,0,0,0.5);
+}
+
+.planet-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 350px;
+  height: 350px;
+  border: 4px solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) rotateX(75deg);
+  box-shadow: 0 0 20px rgba(255, 77, 136, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.planet-ring span {
+  position: absolute;
+  width: 100%;
+  text-align: center;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: bold;
+  letter-spacing: 5px;
+  animation: counterSpin 20s linear infinite;
+  text-shadow: 0 0 10px #ff4d88;
+}
+
+/* Stars / Photos */
+.star-photo {
+  position: absolute;
+  width: 80px;
+  height: 80px;
+  /* background: white; */
+  padding: 3px;
+  /* border-radius: 5px; */
+  /* transform-style: preserve-3d; */
+  /* backface-visibility: hidden; */ /* Keep visible 360 */
+  animation: floatStar 3s ease-in-out infinite alternate;
+}
+
+.star-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 1px solid white;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.galaxy-controls {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: white;
+  background: rgba(0,0,0,0.5);
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  pointer-events: none;
 }
 
 /* Animations */
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.3s ease;
+@keyframes spinPlanet {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(360deg); }
 }
 
-.slide-up-enter-from,
-.slide-up-leave-to {
-  opacity: 0;
-  transform: translateY(20px) scale(0.95);
+@keyframes counterSpin {
+  0% { transform: rotateZ(0deg); }
+  100% { transform: rotateZ(-360deg); }
+}
+
+@keyframes floatStar {
+  0% { margin-top: -5px; }
+  100% { margin-top: 5px; }
+}
+
+/* Hide scrollbar for clean look */
+.galaxy-section::-webkit-scrollbar {
+  display: none;
 }
 </style>
