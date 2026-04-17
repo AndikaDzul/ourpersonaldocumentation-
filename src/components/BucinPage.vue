@@ -83,6 +83,10 @@
     <nav class="navbar" :class="{ 'scrolled': isScrolled }">
       <div class="brand">
         <span class="heart-icon">💖</span> KitaSelamanya
+        <div class="connection-status" :class="{ 'online': isConnected }" :title="isConnected ? 'Server Online' : 'Server Offline'">
+          <span class="status-dot"></span>
+          {{ isConnected ? 'Online' : 'Offline' }}
+        </div>
       </div>
       <ul class="nav-links">
         <li><button class="btn-ghost" @click="scrollToSection('gallery')">Galeri</button></li>
@@ -226,37 +230,77 @@
 
     <!-- Voice Note Section -->
     <section class="section voice-note-section">
+      <div class="glass-orb orb-1"></div>
+      <div class="glass-orb orb-2"></div>
+      
       <div class="section-header">
-        <h2 class="section-title">Voice Note Untukmu Untuk Menyembuhkan Rasa Kangenn </h2>
+        <h2 class="section-title">Pesan Suara Sayang 🎤</h2>
         <div class="divider"></div>
+        <p class="section-subtitle">Disimpan selamanya di galeri cinta kita agar bisa kamu putar sesukamu. ❤️</p>
+        <button class="btn-refresh" @click="refreshVoiceNotes" :disabled="!isConnected">
+          🔄 Muat Ulang Galeri
+        </button>
       </div>
       
       <div class="voice-recorder-container">
-        <div class="recorder-controls">
-          <button 
-            class="record-btn" 
-            :class="{ 'recording': isRecording }" 
-            @click="toggleRecording"
-          >
-            <span class="mic-icon">{{ isRecording ? '⬛' : '🎤' }}</span>
-            {{ isRecording ? 'Stop Recording' : 'Rekam Pesan' }}
-          </button>
-          <p v-if="isRecording" class="recording-status">Sedang merekam... {{ recordingDuration }}s</p>
-        </div>
-
-        <div class="voice-list">
-          <div v-for="(voice, index) in voiceNotes" :key="index" class="voice-item">
-            <div class="voice-info">
-              <span class="voice-date">{{ voice.date }}</span>
-              <span class="voice-duration">{{ voice.duration }}s</span>
+        <div class="recorder-card">
+          <div class="recorder-controls">
+            <div class="timer-display" :class="{ 'active': isRecording }">
+              <span class="pulse-dot" v-if="isRecording"></span>
+              {{ isRecording ? recordingDuration + 's' : 'Siap merekam...' }}
             </div>
-            <audio controls :src="voice.url" class="custom-audio"></audio>
-            <button class="delete-btn" @click="deleteVoiceNote(index)">🗑️</button>
+            
+            <button 
+              class="record-btn-premium" 
+              :class="{ 'recording': isRecording }" 
+              @click="toggleRecording"
+            >
+              <div class="btn-inner">
+                <span class="mic-icon">{{ isRecording ? '⬛' : '🎤' }}</span>
+              </div>
+              <div class="pulse-rings" v-if="isRecording">
+                <div class="ring"></div>
+                <div class="ring"></div>
+              </div>
+            </button>
+            <p class="recorder-hint">{{ isRecording ? 'Klik untuk berhenti' : 'Klik untuk mulai merekam' }}</p>
           </div>
-          <p v-if="voiceNotes.length === 0" class="empty-state">Belum ada pesan suara. Rekam sekarang! 🎤</p>
+
+          <div class="voice-list-container">
+            <TransitionGroup name="list" tag="div" class="voice-list">
+              <div v-for="(voice, index) in voiceNotes" :key="voice.id || index" class="voice-item-premium">
+                <div class="voice-card-bg"></div>
+                <div class="voice-info">
+                  <span class="voice-date">📅 {{ voice.date }}</span>
+                  <span class="voice-duration-tag">⏱️ {{ voice.duration }}s</span>
+                </div>
+                
+                <div class="audio-wrapper">
+                  <audio controls :src="voice.url" class="custom-audio-player"></audio>
+                </div>
+
+                <button class="delete-btn-premium" @click="deleteVoiceNote(index)" title="Hapus Permanen">
+                  <span class="trash-icon">🗑️</span>
+                </button>
+              </div>
+            </TransitionGroup>
+            
+            <div v-if="voiceNotes.length === 0" class="empty-state-premium">
+              <div class="empty-icon">📂</div>
+              <p>Belum ada rekaman. Yuk rekam pesan pertamamu! ✨</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>
+
+    <!-- Notification Toast -->
+    <Transition name="toast">
+      <div v-if="toast.show" class="love-toast" :class="toast.type">
+        <span class="toast-icon">{{ toast.icon }}</span>
+        <span class="toast-msg">{{ toast.message }}</span>
+      </div>
+    </Transition>
 
     <!-- Video Section -->
     <section ref="videoSection" class="section video-section">
@@ -365,12 +409,18 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 // Firebase Imports
 // Socket.io for Realtime MongoDB
 import { io } from "socket.io-client";
+import axios from 'axios';
 
 // GANTI URL INI dengan URL dari Localtunnel (HTTPS) agar bisa dibuka di HP
 // Contoh: "https://purple-cat-22.loca.lt"
 const BACKEND_URL = "http://localhost:3000"; 
+// TIPS: Jika buka di HP, ganti "localhost" di atas dengan IP komputer kamu (misal: 192.168.1.5)
 
-const socket = io(BACKEND_URL);
+const socket = io(BACKEND_URL, {
+  autoConnect: false, // Kita akan konek secara manual di onMounted
+  reconnectionAttempts: 5,
+  timeout: 10000
+});
 
 // Assets Import
 // Assets Import
@@ -513,10 +563,88 @@ const handleScroll = () => {
   isScrolled.value = window.scrollY > 50
 }
 
+const isConnected = ref(false)
+
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
-  loadVoiceNotes()
+  
+  // Setup Listeners DULU sebelum konek
+  setupSocketListeners()
+  
+  // Lalu baru konek
+  socket.connect()
+  
+  // Polling Fallback untuk Vercel (karena Socket.io tidak jalan di Vercel)
+  setInterval(() => {
+    if (!isConnected.value) {
+      console.log("🔄 Socket offline, checking for updates via REST...");
+      fetchVoiceNotesREST();
+    }
+  }, 10000); // Cek setiap 10 detik jika offline
 })
+
+const fetchVoiceNotesREST = async () => {
+  try {
+    const response = await axios.get(`${BACKEND_URL}/voice/list`);
+    if (response.data && Array.isArray(response.data)) {
+      console.log("📦 Received voicenotes via REST:", response.data.length);
+      voiceNotes.value = response.data.map(n => ({
+        ...n,
+        id: n._id,
+        url: n.audioData
+      }));
+    }
+  } catch (err) {
+    console.error("❌ REST Fallback Error:", err.message);
+  }
+}
+
+const setupSocketListeners = () => {
+  socket.on("connect", () => {
+    console.log("✅ Socket Connected to Backend");
+    isConnected.value = true;
+    // Ambil data awal setiap kali konek
+    socket.emit("get_init_data"); // Opsional: trigger manual jika backend support
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Socket Disconnected");
+    isConnected.value = false;
+  });
+
+  socket.on("connect_error", (err) => {
+    console.error("⚠️ Socket Connection Error:", err.message);
+    isConnected.value = false;
+  });
+
+  // Data Listeners
+  socket.on("init_voicenotes", (notes) => {
+    console.log("📦 Received voicenotes init:", notes.length);
+    voiceNotes.value = notes.map(n => ({
+      ...n,
+      id: n._id,
+      url: n.audioData
+    }));
+  });
+
+  socket.on("new_voicenote", (note) => {
+    console.log("🆕 New voicenote received:", note._id);
+    voiceNotes.value.unshift({ 
+      ...note,
+      id: note._id,
+      url: note.audioData
+    });
+  });
+
+  socket.on("deleted_voicenote", (id) => {
+    voiceNotes.value = voiceNotes.value.filter(n => n.id !== id && n._id !== id);
+  });
+}
+
+const refreshVoiceNotes = () => {
+  fetchVoiceNotesREST();
+  showToast("Menyegarkan galeri...", "info", "🔄");
+}
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
@@ -605,28 +733,22 @@ const voiceNotes = ref([])
 const recordingDuration = ref(0)
 let recordingTimer = null
 
-const loadVoiceNotes = async () => {
-  // Initial load handled by socket listener below
-  socket.on("init_voicenotes", (notes) => {
-    voiceNotes.value = notes.map(n => ({
-      ...n,
-      id: n._id, // Mongo uses _id
-      url: n.audioData // Base64 data url
-    }));
-  });
+// Toast Logic
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success',
+  icon: '💖'
+})
 
-  socket.on("new_voicenote", (note) => {
-    voiceNotes.value.unshift({ // Add to top
-      ...note,
-      id: note._id,
-      url: note.audioData
-    });
-  });
-
-  socket.on("deleted_voicenote", (id) => {
-    voiceNotes.value = voiceNotes.value.filter(n => n.id !== id && n._id !== id);
-  });
+const showToast = (msg, type = 'success', icon = '💖') => {
+  toast.value = { show: true, message: msg, type, icon }
+  setTimeout(() => {
+    toast.value.show = false
+  }, 3000)
 }
+
+// loadVoiceNotes lama dihapus karena sudah dipindah ke setupSocketListeners
 
 // Helper: Blob to Base64
 const blobToBase64 = (blob) => {
@@ -687,8 +809,8 @@ const startRecording = async () => {
       const success = await saveVoiceNoteToDB(audioBlob, recordingDuration.value)
       
       if (success) {
-        // Tampilkan Modal WA
-        showWAModal.value = true;
+        // Voice note tersimpan otomatis ke database
+        showToast("Pesan suara sudah tersimpan di galeri! 💖", "success", "💌");
       }
       
       recordingDuration.value = 0
@@ -723,9 +845,9 @@ const stopRecording = () => {
 
 const deleteVoiceNote = async (index) => {
   const note = voiceNotes.value[index]
-  if (confirm("Yakin mau hapus pesan ini?")) {
+  if (confirm("Yakin mau hapus pesan ini secara permanen?")) {
     await deleteVoiceNoteFromDB(note)
-    // loadVoiceNotes() // Auto updated by snapshot
+    showToast("Pesan suara sudah dihapus.", "info", "🗑️")
   }
 }
 
@@ -765,12 +887,7 @@ const waMessage = ref('')
 
 // Tangkap ID note baru dari socket agar bisa dikirim link-nya
 socket.on("new_voicenote", (note) => {
-  latestNoteId.value = note._id; // Simpan ID terakhir
-  voiceNotes.value.unshift({ 
-    ...note,
-    id: note._id,
-    url: note.audioData
-  });
+  latestNoteId.value = note._id; // Simpan ID terakhir untuk fitur WA manual jika dibutuhkan
 });
 
 const sendToWA = (number) => {
@@ -1913,5 +2030,316 @@ const handleGalaxyZoom = (e) => {
 /* Hide scrollbar for clean look */
 .galaxy-section::-webkit-scrollbar {
   display: none;
+}
+/* Connection Status UI */
+.connection-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-left: 15px;
+  transition: 0.3s;
+  color: #888;
+}
+
+.connection-status.online {
+  background: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: #ccc;
+  border-radius: 50%;
+}
+
+.online .status-dot {
+  background: #4CAF50;
+  box-shadow: 0 0 10px #4CAF50;
+}
+
+.btn-refresh {
+  background: white;
+  border: 1px solid #ddd;
+  padding: 8px 15px;
+  border-radius: 50px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: 0.2s;
+  color: #666;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: #f9f9f9;
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Voice Note Premium Styles */
+.voice-note-section {
+  position: relative;
+  background: linear-gradient(135deg, #fff5f7 0%, #fff 100%);
+  padding-bottom: 100px;
+  overflow: hidden;
+}
+
+.recorder-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 30px;
+  padding: 40px;
+  box-shadow: 0 20px 60px rgba(255, 77, 136, 0.1);
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.recorder-controls {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.timer-display {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #666;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: 0.3s;
+}
+
+.timer-display.active {
+  color: var(--primary);
+  transform: scale(1.1);
+}
+
+.pulse-dot {
+  width: 12px;
+  height: 12px;
+  background: var(--primary);
+  border-radius: 50%;
+  animation: pulse 1s infinite;
+}
+
+.record-btn-premium {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: 15px;
+}
+
+.btn-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  box-shadow: 0 10px 25px rgba(255, 77, 136, 0.2);
+  transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 2;
+}
+
+.record-btn-premium.recording .btn-inner {
+  background: var(--primary);
+  color: white;
+  transform: scale(0.9);
+}
+
+.pulse-rings .ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 4px solid var(--primary);
+  border-radius: 50%;
+  animation: ripple 1.5s infinite;
+  opacity: 0;
+}
+
+.pulse-rings .ring:nth-child(2) {
+  animation-delay: 0.5s;
+}
+
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.voice-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.voice-item-premium {
+  position: relative;
+  background: white;
+  padding: 20px;
+  border-radius: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  transition: 0.3s;
+  overflow: hidden;
+  border: 1px solid #f0f0f0;
+}
+
+.voice-item-premium:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 40px rgba(255, 77, 136, 0.15);
+  border-color: rgba(255, 77, 136, 0.2);
+}
+
+.voice-card-bg {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 100px;
+  height: 100px;
+  background: radial-gradient(circle, rgba(255, 77, 136, 0.05) 0%, transparent 70%);
+  border-radius: 50%;
+}
+
+.voice-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 0.85rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.voice-duration-tag {
+  color: var(--primary);
+  background: rgba(255, 77, 136, 0.05);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.audio-wrapper {
+  margin-bottom: 10px;
+}
+
+.custom-audio-player {
+  width: 100%;
+  height: 35px;
+  border-radius: 30px;
+}
+
+.delete-btn-premium {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: 0.3s;
+  font-size: 1.2rem;
+}
+
+.voice-item-premium:hover .delete-btn-premium {
+  opacity: 1;
+}
+
+.delete-btn-premium:hover {
+  transform: scale(1.2) rotate(10deg);
+}
+
+/* Toast Notification */
+.love-toast {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(45, 45, 45, 0.9);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 15px 30px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  z-index: 10000;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  font-weight: 600;
+}
+
+.toast-icon { font-size: 1.3rem; }
+
+.toast-enter-active, .toast-leave-active { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 20px) scale(0.8); }
+
+/* Animation Utils */
+.list-enter-active, .list-leave-active { transition: all 0.5s ease; }
+.list-enter-from, .list-leave-to { opacity: 0; transform: scale(0.9); }
+
+.empty-state-premium {
+  text-align: center;
+  padding: 60px 0;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+
+.glass-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: -1;
+}
+
+.orb-1 {
+  top: 10%;
+  left: -5%;
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 77, 136, 0.1);
+}
+
+.orb-2 {
+  bottom: 10%;
+  right: -5%;
+  width: 400px;
+  height: 400px;
+  background: rgba(255, 133, 162, 0.15);
+}
+
+@media (max-width: 600px) {
+  .recorder-card { padding: 20px; }
+  .voice-list { grid-template-columns: 1fr; }
 }
 </style>
