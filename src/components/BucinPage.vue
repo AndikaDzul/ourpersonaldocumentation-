@@ -208,14 +208,34 @@
       <div class="section-header">
         <h2 class="section-title">Momen Manis</h2>
         <div class="divider"></div>
+        <button class="btn-add-memory" @click="showMediaModal = true">
+          ✨ Tambah Kenangan
+        </button>
       </div>
       
       <div class="gallery-grid">
+        <!-- Dynamic Media from API -->
+        <div 
+          v-for="(m, i) in dynamicMedia.filter(x => x.type === 'photo')"
+          :key="'dyn-'+i"
+          class="photo-card dynamic-memory"
+          @click="openDynamicMedia(m, i)"
+        >
+          <div class="img-wrapper">
+             <img :src="m.url" :alt="m.caption" loading="lazy" />
+          </div>
+          <div class="photo-overlay">
+            <span class="photo-date">Momen Eksklusif</span>
+            <h3 class="photo-title">{{ m.caption || 'Kenangan Baru' }}</h3>
+          </div>
+        </div>
+
+        <!-- Static Photos -->
         <div
           v-for="(p, i) in photos"
           :key="i"
           class="photo-card"
-          @click="openLightbox(i, 'photos')"
+          @click="openLightbox(i + dynamicMedia.filter(x => x.type === 'photo').length, 'photos')"
         >
           <div class="img-wrapper">
             <img :src="p.src" :alt="p.title" loading="lazy" />
@@ -229,6 +249,7 @@
     </section>
 
     <!-- Voice Note Section -->
+    <!-- Premium Voice Note Section -->
     <section class="section voice-note-section">
       <div class="glass-orb orb-1"></div>
       <div class="glass-orb orb-2"></div>
@@ -236,59 +257,54 @@
       <div class="section-header">
         <h2 class="section-title">Pesan Suara Sayang 🎤</h2>
         <div class="divider"></div>
-        <p class="section-subtitle">Disimpan selamanya di galeri cinta kita agar bisa kamu putar sesukamu. ❤️</p>
-        <button class="btn-refresh" @click="refreshVoiceNotes" :disabled="!isConnected">
-          🔄 Muat Ulang Galeri
+        <p class="section-subtitle">Dengarkan suaraku kapan saja kamu rindu. ❤️</p>
+        <button class="btn-refresh-premium" @click="refreshVoiceNotes" :disabled="!isConnected">
+          <span class="icon">🔄</span> Perbarui Galeri
         </button>
       </div>
       
-      <div class="voice-recorder-container">
-        <div class="recorder-card">
-          <div class="recorder-controls">
-            <div class="timer-display" :class="{ 'active': isRecording }">
-              <span class="pulse-dot" v-if="isRecording"></span>
-              {{ isRecording ? recordingDuration + 's' : 'Siap merekam...' }}
-            </div>
-            
-            <button 
-              class="record-btn-premium" 
-              :class="{ 'recording': isRecording }" 
-              @click="toggleRecording"
-            >
-              <div class="btn-inner">
-                <span class="mic-icon">{{ isRecording ? '⬛' : '🎤' }}</span>
-              </div>
-              <div class="pulse-rings" v-if="isRecording">
-                <div class="ring"></div>
-                <div class="ring"></div>
-              </div>
-            </button>
-            <p class="recorder-hint">{{ isRecording ? 'Klik untuk berhenti' : 'Klik untuk mulai merekam' }}</p>
+      <div class="voice-recorder-container-premium">
+        <!-- Recorder Card -->
+        <div class="recorder-card-premium" :class="{ 'recording-active': isRecording }">
+          <div class="recorder-visualizer" v-if="isRecording">
+            <div class="wave-bar" v-for="n in 12" :key="n" :style="{ animationDelay: (n * 0.1) + 's' }"></div>
           </div>
 
-          <div class="voice-list-container">
-            <TransitionGroup name="list" tag="div" class="voice-list">
-              <div v-for="(voice, index) in voiceNotes" :key="voice.id || index" class="voice-item-premium">
-                <div class="voice-card-bg"></div>
-                <div class="voice-info">
-                  <span class="voice-date">📅 {{ voice.date }}</span>
-                  <span class="voice-duration-tag">⏱️ {{ voice.duration }}s</span>
-                </div>
-                
-                <div class="audio-wrapper">
-                  <audio controls :src="voice.url" class="custom-audio-player"></audio>
-                </div>
-
-                <button class="delete-btn-premium" @click="deleteVoiceNote(index)" title="Hapus Permanen">
-                  <span class="trash-icon">🗑️</span>
-                </button>
-              </div>
-            </TransitionGroup>
-            
-            <div v-if="voiceNotes.length === 0" class="empty-state-premium">
-              <div class="empty-icon">📂</div>
-              <p>Belum ada rekaman. Yuk rekam pesan pertamamu! ✨</p>
+          <div class="timer-display-premium">
+            <span class="status-text">{{ isRecording ? 'Sedang Merekam...' : 'Ketuk untuk Bicara' }}</span>
+            <h3 class="time">{{ isRecording ? recordingDuration + 's' : '00:00' }}</h3>
+          </div>
+          
+          <button 
+            class="main-record-btn" 
+            :class="{ 'recording': isRecording }" 
+            @click="toggleRecording"
+          >
+            <div class="btn-glow"></div>
+            <div class="btn-content">
+              <span class="icon">{{ isRecording ? '⏹' : '🎤' }}</span>
             </div>
+          </button>
+        </div>
+
+        <!-- Voice Notes List (Redesigned as Premium Tags) -->
+        <div class="voice-notes-showcase">
+          <div 
+            v-for="(note, index) in voiceNotes" 
+            :key="note.id || index"
+            class="voice-tag-premium"
+          >
+            <div class="tag-left">
+              <button class="btn-play-premium" @click="playVoiceNote(note)">
+                <span class="play-icon">▶</span>
+                <span class="play-text">Dengarkan Pesan 🎧</span>
+              </button>
+              <div class="tag-info">
+                <span class="tag-date">{{ note.date }}</span>
+                <span class="tag-duration">⏱ {{ formatDuration(note.duration) }}</span>
+              </div>
+            </div>
+            <button class="tag-delete" @click="deleteVoiceNote(index)">🗑️</button>
           </div>
         </div>
       </div>
@@ -302,6 +318,78 @@
       </div>
     </Transition>
 
+    <!-- Media Upload Modal -->
+    <Transition name="fade">
+      <div v-if="showMediaModal" class="media-modal-overlay">
+        <div class="media-modal-card">
+          <button class="modal-close" @click="showMediaModal = false">×</button>
+          
+          <h2 class="modal-title">✨ Tambah Kenangan</h2>
+          <p class="modal-subtitle">Abadikan momen manis kita berdua.</p>
+
+          <div class="media-form">
+            <div class="form-group">
+              <label>Jenis Media</label>
+              <div class="type-selector">
+                <button 
+                  :class="{ active: mediaForm.type === 'photo' }" 
+                  @click="mediaForm.type = 'photo'"
+                >📸 Foto</button>
+                <button 
+                  :class="{ active: mediaForm.type === 'video' }" 
+                  @click="mediaForm.type = 'video'"
+                >🎥 Video</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>{{ mediaForm.type === 'photo' ? 'Pilih Foto' : 'Link Video (Cloudinary/YouTube)' }}</label>
+              
+              <!-- File Upload untuk Foto -->
+              <div v-if="mediaForm.type === 'photo'" class="file-upload-wrapper">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  @change="handleFileUpload" 
+                  id="media-file"
+                  class="hidden-input"
+                />
+                <label for="media-file" class="file-label">
+                  {{ mediaForm.url ? '✅ Foto Terpilih' : '📁 Klik untuk Pilih Foto' }}
+                </label>
+              </div>
+
+              <!-- URL Input untuk Video -->
+              <input 
+                v-else
+                v-model="mediaForm.url" 
+                type="text" 
+                placeholder="Tempel link video di sini..." 
+                class="modal-input"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Pesan Singkat</label>
+              <input 
+                v-model="mediaForm.caption" 
+                type="text" 
+                placeholder="Tulis caption-nya sayang..." 
+                class="modal-input"
+              />
+            </div>
+
+            <button class="btn-save-media" @click="saveMedia">
+              💾 Simpan & Kembali
+            </button>
+            <button class="btn-cancel-modal" @click="showMediaModal = false">
+              Batal
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Video Section -->
     <section ref="videoSection" class="section video-section">
       <div class="section-header">
@@ -310,11 +398,16 @@
       </div>
       
       <div class="video-grid">
-        <div v-for="(v, i) in videos" :key="i" class="video-card-simple">
-          <video controls preload="metadata">
+        <div v-for="(v, i) in allVideos" :key="i" class="video-card-simple">
+          <video v-if="v.src && !v.src.includes('youtube.com') && !v.src.includes('youtu.be')" controls preload="metadata">
             <source :src="v.src" type="video/mp4">
             Browser kamu tidak support video.
           </video>
+          <!-- Iframe Fallback for YouTube links -->
+          <div v-else class="video-iframe-container">
+            <iframe :src="v.src.replace('watch?v=', 'embed/')" frameborder="0" allowfullscreen></iframe>
+          </div>
+          <p v-if="v.title" class="video-caption">{{ v.title }}</p>
         </div>
       </div>
     </section>
@@ -360,12 +453,23 @@
 
     <!-- Lightbox -->
     <Transition name="fade">
-      <div v-if="lightboxOpen" class="lightbox" @click.self="closeLightbox">
+      <div 
+        v-if="lightboxOpen" 
+        class="lightbox" 
+        @click.self="closeLightbox"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+      >
         <button class="close-btn" @click="closeLightbox">✕</button>
         <div class="lightbox-content">
           <button class="nav-btn prev" @click.stop="prevImage">‹</button>
-          <div class="lightbox-media">
-            <img :src="activeImage.src" :alt="activeImage.title" />
+          <div class="lightbox-media" @wheel.prevent="handleWheelZoom">
+            <img 
+              :src="activeImage.src" 
+              :alt="activeImage.title" 
+              :style="{ transform: 'scale(' + zoomLevel + ')' }"
+            />
             <div class="lightbox-details">
               <h3>{{ activeImage.title }}</h3>
               <p>{{ activeImage.desc }}</p>
@@ -404,7 +508,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 // Firebase Imports
 // Socket.io for Realtime MongoDB
@@ -413,7 +517,7 @@ import axios from 'axios';
 
 // GANTI URL INI dengan URL dari Localtunnel (HTTPS) agar bisa dibuka di HP
 // Contoh: "https://purple-cat-22.loca.lt"
-const BACKEND_URL = "http://localhost:3000"; 
+const BACKEND_URL = "https://may-worldd-y8ps.vercel.app"; 
 // TIPS: Jika buka di HP, ganti "localhost" di atas dengan IP komputer kamu (misal: 192.168.1.5)
 
 const socket = io(BACKEND_URL, {
@@ -564,6 +668,13 @@ const handleScroll = () => {
 }
 
 const isConnected = ref(false)
+const dynamicMedia = ref([])
+const showMediaModal = ref(false)
+const mediaForm = ref({
+  type: 'photo', // 'photo' | 'video'
+  url: '',
+  caption: ''
+})
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)
@@ -574,18 +685,96 @@ onMounted(() => {
   // Lalu baru konek
   socket.connect()
   
+  // Ambil Data Awal
+  fetchVoiceNotesREST();
+  fetchGallery();
+
+  // Atur Volume Musik Awal (Kecil agar tidak berisik)
+  if (audioPlayer.value) {
+    audioPlayer.value.volume = 0.3;
+  }
+  
   // Polling Fallback untuk Vercel (karena Socket.io tidak jalan di Vercel)
   setInterval(() => {
     if (!isConnected.value) {
       console.log("🔄 Socket offline, checking for updates via REST...");
       fetchVoiceNotesREST();
+      fetchGallery();
     }
   }, 10000); // Cek setiap 10 detik jika offline
 })
 
+// Watcher untuk memastikan volume tetap kecil saat lagu berubah
+watch(currentSongIndex, () => {
+  setTimeout(() => {
+    if (audioPlayer.value) audioPlayer.value.volume = 0.3;
+  }, 100);
+});
+
+const fetchGallery = async () => {
+  try {
+    const response = await axios.get(`${BACKEND_URL}/gallery`);
+    if (response.data && Array.isArray(response.data)) {
+      dynamicMedia.value = response.data;
+    }
+  } catch (err) {
+    console.error("❌ Gallery Fetch Error:", err.message);
+  }
+}
+
+const saveMedia = async () => {
+  if (!mediaForm.value.url) return showToast("Pilih foto dulu ya! 📸", "warning", "⚠️");
+
+  try {
+    const response = await axios.post(`${BACKEND_URL}/gallery`, mediaForm.value);
+    if (response.data) {
+      dynamicMedia.value.unshift(response.data);
+      showMediaModal.value = false;
+      mediaForm.value = { type: 'photo', url: '', caption: '' };
+      showToast("Kenangan kita berhasil disimpan! 💖", "success", "✨");
+    }
+  } catch (err) {
+    console.error("❌ Media Save Error:", err.message);
+    const msg = err.response?.status === 413 
+      ? "File terlalu besar untuk hosting Vercel. Kompresi otomatis gagal menurunkan ukuran cukup banyak."
+      : "Gagal menyimpan kenangan (Database atau Jaringan bermasalah).";
+    showToast(msg, "danger", "❌");
+  }
+}
+
+const handleFileUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  try {
+    let finalFile = file;
+
+    // Foto Otomatis Dikompres jika tipe image
+    if (file.type.startsWith('image/')) {
+      showToast("Mengoptimalkan foto... ✨", "info", "⚙️");
+      finalFile = await compressImage(file);
+      console.log(`📸 Photo optimized: ${file.size} -> ${finalFile.size}`);
+    } else if (file.type.startsWith('video/')) {
+       // Video check (Vercel has 4.5MB total limit)
+       if (file.size > 4 * 1024 * 1024) {
+         alert("⚠️ Video terlalu besar untuk Vercel (Max 4MB). Coba video lebih pendek ya sayang!");
+         event.target.value = '';
+         return;
+       }
+    }
+
+    const base64 = await blobToBase64(finalFile);
+    mediaForm.value.url = base64;
+    showToast("Media siap disimpan! 💖", "success", "✅");
+  } catch (err) {
+    console.error("File Optimization Error:", err);
+    showToast("Gagal memproses file.", "danger", "❌");
+  }
+}
+
 const fetchVoiceNotesREST = async () => {
   try {
-    const response = await axios.get(`${BACKEND_URL}/voice/list`);
+    const response = await axios.get(`${BACKEND_URL}/voicenotes`);
     if (response.data && Array.isArray(response.data)) {
       console.log("📦 Received voicenotes via REST:", response.data.length);
       voiceNotes.value = response.data.map(n => ({
@@ -641,9 +830,47 @@ const setupSocketListeners = () => {
   });
 }
 
+const formatDuration = (seconds) => {
+  if (!seconds) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 const refreshVoiceNotes = () => {
   fetchVoiceNotesREST();
   showToast("Menyegarkan galeri...", "info", "🔄");
+}
+
+const playVoiceNote = (note) => {
+  if (!note.url) return showToast("File suara tidak ditemukan.", "error", "❌");
+  
+  // Ducking: Kecilkan volume musik saat voice note diputar
+  if (audioPlayer.value) audioPlayer.value.volume = 0.1;
+
+  // Play love sound effect first
+  const doll = new Audio(dollVoice);
+  doll.volume = 0.5;
+  doll.play().catch(() => {});
+
+  const audio = new Audio(note.url);
+  audio.volume = 1.0; // Pastikan volume MAKSIMAL
+  
+  console.log("🔊 Memutar audio dari:", note.url.substring(0, 50) + "...");
+  
+  audio.play().then(() => {
+    showToast("Memutar pesan suara... 🎵", "success", "🎶");
+  }).catch(e => {
+    console.error("❌ Audio Playback Error:", e);
+    showToast("Gagal memutar suara. Pastikan speaker menyala!", "error", "❌");
+    // Kembalikan volume jika gagal
+    if (audioPlayer.value) audioPlayer.value.volume = 0.3;
+  });
+
+  // Saat voice note selesai, kembalikan volume musik
+  audio.onended = () => {
+    if (audioPlayer.value) audioPlayer.value.volume = 0.3;
+  }
 }
 
 onUnmounted(() => {
@@ -698,7 +925,28 @@ const scrollToSection = (section) => {
 }
 
 // Lightbox
-const activeList = computed(() => activeSource.value === 'photos' ? photos.value : trending.value)
+// Unified Gallery Logic
+const allPhotos = computed(() => {
+  const dyn = dynamicMedia.value
+    .filter(m => m.type === 'photo')
+    .map(m => ({ 
+      src: m.url, 
+      title: m.caption || 'Momen Baru', 
+      date: 'Baru Saja', 
+      desc: m.caption || 'Kenangan baru yang diabadikan.',
+      isDynamic: true
+    }));
+  return [...dyn, ...photos.value];
+})
+
+const allVideos = computed(() => {
+  const dyn = dynamicMedia.value
+    .filter(m => m.type === 'video')
+    .map(m => ({ src: m.url, title: m.caption }));
+  return [...dyn, ...videos.value];
+})
+
+const activeList = computed(() => activeSource.value === 'photos' ? allPhotos.value : trending.value)
 const activeImage = computed(() => activeList.value[currentIdx.value] || {})
 
 const openLightbox = (index, source) => {
@@ -709,7 +957,21 @@ const openLightbox = (index, source) => {
   activeSource.value = source
   currentIdx.value = index
   lightboxOpen.value = true
+  resetZoom()
   document.body.style.overflow = 'hidden'
+}
+
+const openDynamicMedia = (media, index) => {
+  if (media.type === 'video') {
+    // Play love sound
+    const audio = new Audio(dollVoice)
+    audio.play().catch(e => console.log('Error playing sound:', e))
+    window.open(media.url, '_blank');
+  } else {
+    // Jika foto, buka di Lightbox pakai list terpadu
+    // index dikirim dari v-for dynamicMedia
+    openLightbox(index, 'photos');
+  }
 }
 
 const closeLightbox = () => {
@@ -717,12 +979,74 @@ const closeLightbox = () => {
   document.body.style.overflow = ''
 }
 
+const zoomLevel = ref(1)
+
+const resetZoom = () => {
+  zoomLevel.value = 1
+}
+
+const handleWheelZoom = (e) => {
+  if (e.deltaY < 0) {
+    zoomLevel.value = Math.min(zoomLevel.value + 0.1, 3)
+  } else {
+    zoomLevel.value = Math.max(zoomLevel.value - 0.1, 0.5)
+  }
+}
+
+// Swipe & Gesture Logic
+const touchStartX = ref(0)
+const touchEndX = ref(0)
+const initialPinchDistance = ref(0)
+
+const handleTouchStart = (e) => {
+  if (e.touches.length === 1) {
+    touchStartX.value = e.touches[0].clientX
+  } else if (e.touches.length === 2) {
+    initialPinchDistance.value = Math.hypot(
+      e.touches[0].pageX - e.touches[1].pageX,
+      e.touches[0].pageY - e.touches[1].pageY
+    )
+  }
+}
+
+const handleTouchMove = (e) => {
+  if (e.touches.length === 2) {
+    const currentDistance = Math.hypot(
+      e.touches[0].pageX - e.touches[1].pageX,
+      e.touches[0].pageY - e.touches[1].pageY
+    )
+    const delta = currentDistance / initialPinchDistance.value
+    // Dynamic Zoom Control
+    zoomLevel.value = Math.min(Math.max(zoomLevel.value * delta, 0.5), 3)
+    initialPinchDistance.value = currentDistance
+  }
+}
+
+const handleTouchEnd = (e) => {
+  if (e.changedTouches.length === 1) {
+    touchEndX.value = e.changedTouches[0].clientX
+    handleSwipe()
+  }
+}
+
+const handleSwipe = () => {
+  const swipeThreshold = 50
+  const diff = touchStartX.value - touchEndX.value
+  
+  if (Math.abs(diff) > swipeThreshold) {
+    if (diff > 0) nextImage() // Swipe Left -> Next
+    else prevImage() // Swipe Right -> Prev
+  }
+}
+
 const nextImage = () => {
   currentIdx.value = (currentIdx.value + 1) % activeList.value.length
+  resetZoom()
 }
 
 const prevImage = () => {
   currentIdx.value = (currentIdx.value - 1 + activeList.value.length) % activeList.value.length
+  resetZoom()
 }
 
 // Voice Note Logic
@@ -760,21 +1084,67 @@ const blobToBase64 = (blob) => {
   });
 }
 
+// Helper: Image Compression (Resize & Quality)
+const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Resize if too wide
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          resolve(blob);
+        }, 'image/jpeg', quality);
+      };
+      img.onerror = reject;
+    };
+    reader.onerror = reject;
+  });
+}
+
 const saveVoiceNoteToDB = async (audioBlob, duration) => {
   try {
     const base64Data = await blobToBase64(audioBlob);
     
-    // Kirim ke server via Socket
-    socket.emit("send_voicenote", {
+    // Kirim ke server via REST API (Vercel compatible)
+    const payload = {
       audioData: base64Data,
       duration: duration,
       date: new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
-    });
+    };
+
+    const response = await axios.post(`${BACKEND_URL}/voicenotes`, payload);
     
-    return true; /* Return true to indicate success */
+    if (response.data) {
+      console.log("✅ Voice note saved via REST");
+      // Update list lokal agar langsung muncul
+      voiceNotes.value.unshift({
+        ...response.data,
+        id: response.data._id,
+        url: response.data.audioData
+      });
+    }
+    
+    return true;
   } catch (error) {
     console.error("Error saving voice note:", error);
-    alert("Gagal menyimpan server offline?");
+    alert("Gagal menyimpan: " + (error.response?.data?.message || error.message));
     return false;
   }
 }
@@ -2342,4 +2712,427 @@ const handleGalaxyZoom = (e) => {
   .recorder-card { padding: 20px; }
   .voice-list { grid-template-columns: 1fr; }
 }
+
+/* --- New Premium Gallery Styles --- */
+.btn-add-memory {
+  background: linear-gradient(45deg, var(--primary), #ff9a9e);
+  color: white;
+  border: none;
+  padding: 10px 25px;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 15px;
+  box-shadow: 0 4px 15px rgba(255, 133, 162, 0.3);
+  transition: 0.3s;
+}
+.btn-add-memory:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(255, 133, 162, 0.5);
+}
+
+.media-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.media-modal-card {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 40px;
+  border-radius: 30px;
+  width: 100%;
+  max-width: 450px;
+  position: relative;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255,255,255,0.5);
+}
+
+.modal-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #888;
+  cursor: pointer;
+}
+
+.modal-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: 2.2rem;
+  color: var(--primary);
+  margin-bottom: 5px;
+}
+
+.modal-subtitle {
+  color: #666;
+  margin-bottom: 25px;
+}
+
+.media-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.type-selector {
+  display: flex;
+  gap: 10px;
+}
+
+.type-selector button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: 2px solid #eee;
+  background: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.type-selector button.active {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--primary);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid #eee;
+  outline: none;
+  transition: 0.3s;
+}
+
+.modal-input:focus {
+  border-color: var(--primary);
+}
+
+.btn-save-media {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 15px;
+  border-radius: 15px;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+/* --- Premium Voice Note Overhaul --- */
+.voice-recorder-container-premium {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  margin-top: 30px;
+}
+
+.recorder-card-premium {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(15px);
+  padding: 40px;
+  border-radius: 40px;
+  width: 300px;
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.05);
+  transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.recorder-card-premium.recording-active {
+  transform: scale(1.05);
+  background: rgba(255, 133, 162, 0.1);
+  box-shadow: 0 20px 50px rgba(255, 133, 162, 0.2);
+}
+
+.recorder-visualizer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 40px;
+  margin-bottom: 20px;
+}
+
+.wave-bar {
+  width: 4px;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+  animation: waveGrow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes waveGrow {
+  from { transform: scaleY(0.2); }
+  to { transform: scaleY(1); }
+}
+
+.timer-display-premium {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.status-text {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: 0.7;
+}
+
+.time {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 5px 0;
+}
+
+.main-record-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background: white;
+  cursor: pointer;
+  position: relative;
+  transition: 0.3s;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.main-record-btn.recording {
+  background: #ff4d4d;
+  color: white;
+}
+
+.btn-glow {
+  position: absolute;
+  inset: -10px;
+  background: var(--primary);
+  border-radius: 50%;
+  opacity: 0.3;
+  filter: blur(15px);
+  animation: pulseRotate 2s linear infinite;
+}
+
+.btn-content .icon {
+  font-size: 2rem;
+}
+
+/* Voice Note Showcase (Premium Tags) */
+.voice-notes-showcase {
+  width: 100%;
+  max-width: 600px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.voice-tag-premium {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(10px);
+  padding: 12px 15px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  transition: 0.3s;
+}
+
+.voice-tag-premium:hover {
+  transform: translateY(-3px);
+  background: white;
+  box-shadow: 0 10px 20px rgba(255, 133, 162, 0.15);
+}
+
+.btn-play-premium {
+  background: linear-gradient(45deg, var(--primary), #ff9a9e);
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 50px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: 0.3s;
+  font-weight: 600;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 10px rgba(255, 133, 162, 0.3);
+}
+
+.btn-play-premium:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 15px rgba(255, 133, 162, 0.5);
+}
+
+.play-icon {
+  font-size: 0.7rem;
+}
+
+.tag-info {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  margin-left: 5px;
+}
+
+.tag-date {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.tag-duration {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.tag-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  filter: grayscale(1);
+  opacity: 0.5;
+  transition: 0.3s;
+}
+
+.tag-delete:hover {
+  filter: grayscale(0);
+  opacity: 1;
+  transform: scale(1.2);
+}
+
+@keyframes pulseRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  background: #eee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-refresh-premium {
+  background: rgba(255, 133, 162, 0.1);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  padding: 8px 15px;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: 0.3s;
+}
+
+.btn-refresh-premium:hover {
+  background: var(--primary);
+  color: white;
+}
+
+.file-upload-wrapper {
+  width: 100%;
+}
+
+.hidden-input {
+  display: none;
+}
+
+.file-label {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  background: #f8f8f8;
+  border: 2px dashed #ddd;
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.3s;
+  color: #666;
+}
+
+.file-label:hover {
+  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--primary);
+}
+.btn-cancel-modal {
+  background: #eee;
+  color: #666;
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 5px;
+  transition: 0.3s;
+}
+
+.btn-cancel-modal:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.video-caption {
+  font-size: 0.8rem;
+  margin-top: 10px;
+  color: #888;
+  font-style: italic;
+}
+
+.video-iframe-container {
+  aspect-ratio: 16/9;
+  width: 100%;
+}
+
+.video-iframe-container iframe {
+  width: 100%;
+  height: 100%;
+  border-radius: 15px;
+}
+
+/* Animations perbaikan */
+.photo-card {
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
+}
+
+.photo-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  z-index: 10;
+}
+
+.voice-tag-premium {
+  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+  border: 1px solid rgba(255, 133, 162, 0.2);
+}
+
+.voice-tag-premium:active {
+  transform: scale(0.95);
+}
+
 </style>
