@@ -1,5 +1,41 @@
 <template>
   <div class="page">
+
+    <!-- ============================================================
+         SPLASH / INTRO SCREEN
+    ============================================================= -->
+    <Transition name="splash-fade">
+      <div v-if="showSplash" class="splash-screen" @click="dismissSplash">
+        <!-- Animated background petals -->
+        <div class="splash-petal" v-for="n in 15" :key="'p'+n" :style="getSplatPetalStyle(n)">🌸</div>
+
+        <!-- Centered content -->
+        <div class="splash-content">
+          <!-- App Logo / Icon Ring -->
+          <div class="splash-icon-ring">
+            <div class="splash-ring ring-1"></div>
+            <div class="splash-ring ring-2"></div>
+            <div class="splash-icon-core">
+              <span class="splash-heart">💖</span>
+            </div>
+          </div>
+
+          <!-- Title -->
+          <h1 class="splash-title">KitaSelamanya</h1>
+          <p class="splash-sub">Kenangan kita, diabadikan selamanya 🌸</p>
+
+          <!-- Tap indicator -->
+          <div class="splash-tap">
+            <div class="splash-tap-ring"></div>
+            <span>Ketuk untuk masuk</span>
+          </div>
+        </div>
+
+        <!-- Bottom version -->
+        <p class="splash-version">Made with 💖 by Andika</p>
+      </div>
+    </Transition>
+
     <!-- Pre-entry Questionnaire Overlay -->
     <Transition name="fade">
       <div v-if="isGlobalLoading" class="global-loading-overlay">
@@ -651,9 +687,29 @@ const trending = ref([
 ])
 
 // State
-const showQuestionnaire = ref(true)
+const showSplash = ref(true)
+const showQuestionnaire = ref(false)  // Start false — questionnaire shows after splash
 const questionStep = ref(1)
 const missPercentage = ref(50)
+
+const dismissSplash = () => {
+  showSplash.value = false
+  // Show questionnaire after brief delay
+  setTimeout(() => {
+    showQuestionnaire.value = true
+  }, 600)
+}
+
+const getSplatPetalStyle = (n) => {
+  const delay = (n * 0.4) % 6
+  const duration = 6 + (n * 0.7) % 6
+  const size = 16 + (n * 3) % 18
+  return {
+    animation: `petalFloat ${duration}s ${delay}s infinite linear`,
+    left: `${(n / 15) * 100}%`,
+    fontSize: `${size}px`,
+  }
+}
 
 // Questionnaire Logic
 const nextQuestion = () => {
@@ -1490,6 +1546,194 @@ const handleGalaxyZoom = (e) => {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Outfit:wght@300;400;600&display=swap');
+
+/* =====================================================
+   SPLASH SCREEN
+   ===================================================== */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: linear-gradient(135deg, #ff6eb4 0%, #ff9de2 40%, #ffd6e7 70%, #fff0f5 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Floating petals */
+.splash-petal {
+  position: absolute;
+  top: -40px;
+  animation: petalFloat 8s linear infinite;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+@keyframes petalFloat {
+  0%   { transform: translateY(0) rotate(0deg);    opacity: 0.8; }
+  100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+}
+
+/* Center content */
+.splash-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  animation: splashContentIn 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes splashContentIn {
+  from { transform: scale(0.8) translateY(30px); opacity: 0; }
+  to   { transform: scale(1) translateY(0);      opacity: 1; }
+}
+
+/* Icon ring */
+.splash-icon-ring {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.splash-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  animation: ringPulse 2.5s ease-in-out infinite;
+}
+
+.ring-2 {
+  inset: -15px;
+  border-color: rgba(255, 255, 255, 0.3);
+  animation-delay: 0.5s;
+}
+
+@keyframes ringPulse {
+  0%, 100% { transform: scale(1);    opacity: 0.8; }
+  50%       { transform: scale(1.06); opacity: 0.4; }
+}
+
+.splash-icon-core {
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(255, 77, 136, 0.3);
+}
+
+.splash-heart {
+  font-size: 3.2rem;
+  animation: heartBeatSplash 1.2s ease-in-out infinite;
+  display: block;
+}
+
+@keyframes heartBeatSplash {
+  0%, 100% { transform: scale(1); }
+  30%       { transform: scale(1.15); }
+  60%       { transform: scale(1.05); }
+}
+
+/* Title */
+.splash-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: clamp(2.4rem, 8vw, 4rem);
+  font-weight: 700;
+  color: white;
+  text-shadow: 0 4px 20px rgba(200, 0, 80, 0.3);
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.splash-sub {
+  font-size: clamp(0.9rem, 3vw, 1.1rem);
+  color: rgba(255, 255, 255, 0.85);
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Tap indicator */
+.splash-tap {
+  position: relative;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.95rem;
+  font-weight: 600;
+  animation: tapIndicatorBounce 2s ease-in-out infinite;
+}
+
+@keyframes tapIndicatorBounce {
+  0%, 100% { transform: translateY(0);  }
+  50%       { transform: translateY(-8px); }
+}
+
+.splash-tap-ring {
+  width: 52px;
+  height: 52px;
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  position: relative;
+}
+
+.splash-tap-ring::before {
+  content: '\25BC';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: white;
+}
+
+.splash-tap-ring::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: tapRingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tapRingPulse {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Bottom version text */
+.splash-version {
+  position: absolute;
+  bottom: 30px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
+
+/* Splash fade-out transition */
+.splash-fade-leave-active {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.splash-fade-leave-to {
+  opacity: 0;
+  transform: scale(1.05);
+}
 
 :root {
   --primary: #ff85a2; /* Cute Pink */
@@ -3564,5 +3808,111 @@ const handleGalaxyZoom = (e) => {
 @keyframes shrinkProgress {
   from { transform: scaleX(1); }
   to   { transform: scaleX(0); }
+}
+
+/* =====================================================
+   MOBILE RESPONSIVE – Full App
+   ===================================================== */
+
+/* Tablets & up — minor tweaks */
+@media (max-width: 768px) {
+
+  /* Splash */
+  .splash-title   { font-size: 2.6rem; }
+  .splash-sub     { font-size: 0.9rem; text-align: center; padding: 0 20px; }
+  .splash-icon-core { width: 80px; height: 80px; }
+  .splash-heart   { font-size: 2.4rem; }
+  .splash-tap     { font-size: 0.85rem; gap: 10px; }
+
+  /* Navbar */
+  .navbar { padding: 14px 20px; }
+  .brand  { font-size: 20px; }
+  .nav-links { gap: 4px; }
+  .btn-ghost { font-size: 13px; padding: 6px 10px; }
+
+  /* Hero */
+  .title-animate  { font-size: 3rem; }
+  .subtitle-animate { font-size: 1.1rem; }
+
+  /* Gallery */
+  .gallery-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 0 10px;
+  }
+
+  /* Section titles */
+  .section-title { font-size: 2rem; }
+
+  /* Music player */
+  .music-player { width: calc(100% - 40px); left: 20px; right: 20px; }
+
+  /* Voice note notification */
+  .vn-notif { width: 90vw; padding: 14px 16px; gap: 12px; }
+  .vn-notif-icon { width: 46px; height: 46px; font-size: 1.8rem; }
+  .vn-notif-title { font-size: 1.1rem; }
+
+  /* Modals */
+  .media-modal-card { padding: 24px 18px; margin: 16px; border-radius: 20px; }
+  .modal-title { font-size: 1.6rem; }
+
+  /* Lightbox */
+  .lightbox-content { padding: 0; }
+  .lightbox-media img { max-height: 60vh; object-fit: contain; }
+  .nav-btn.prev { left: 4px; }
+  .nav-btn.next { right: 4px; }
+
+  /* Video grid */
+  .video-grid { grid-template-columns: 1fr; gap: 14px; padding: 0 12px; }
+
+  /* Highlight */
+  .highlight-carousel { gap: 12px; padding: 0 12px; }
+  .highlight-card { min-width: 220px; }
+
+  /* Story */
+  .story-text { font-size: 1rem; line-height: 1.7; }
+
+  /* Galaxy section */
+  .galaxy-section { height: 350px; }
+}
+
+/* Phones */
+@media (max-width: 480px) {
+
+  /* Splash */
+  .splash-title   { font-size: 2rem; }
+  .splash-content { gap: 14px; }
+  .splash-icon-ring { width: 100px; height: 100px; }
+  .splash-icon-core { width: 70px; height: 70px; }
+  .splash-heart   { font-size: 2rem; }
+
+  /* Navbar */
+  .connection-status { display: none; }
+
+  /* Gallery – single column on very small */
+  .gallery-grid { grid-template-columns: 1fr; }
+
+  /* Upload label */
+  .file-label { font-size: 0.9rem; padding: 14px; }
+
+  /* Global loading */
+  .loading-content { padding: 24px 20px; }
+  .loading-text { font-size: 1.3rem; }
+
+  /* Voice note player */
+  .recorder-card-premium { padding: 20px 14px; }
+  .main-record-btn { width: 70px; height: 70px; }
+  .timer-display-premium h3 { font-size: 2.5rem; }
+
+  /* Modals */
+  .question-box { padding: 28px 20px; }
+  .question-title { font-size: 1.8rem; }
+  .question-text  { font-size: 1.1rem; }
+
+  /* Type selector */
+  .type-selector button { padding: 8px 12px; font-size: 0.85rem; }
+
+  /* Video */
+  .video-grid { padding: 0 8px; }
 }
 </style>
