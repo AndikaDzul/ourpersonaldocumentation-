@@ -2,6 +2,15 @@
   <div class="page">
     <!-- Pre-entry Questionnaire Overlay -->
     <Transition name="fade">
+      <div v-if="isGlobalLoading" class="global-loading-overlay">
+        <div class="loading-content">
+          <div class="heart-spinner">💖</div>
+          <p class="loading-text">{{ loadingMessage || 'Sedang memproses... ✨' }}</p>
+        </div>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
       <div v-if="showQuestionnaire" class="question-overlay">
         <div class="question-box">
           <!-- Step 1: Do you like me? -->
@@ -216,17 +225,17 @@
       <div class="gallery-grid">
         <!-- Dynamic Media from API -->
         <div 
-          v-for="(m, i) in dynamicMedia.filter(x => x.type === 'photo')"
+          v-for="(m, i) in dynamicPhotos"
           :key="'dyn-'+(m._id || i)"
           class="photo-card dynamic-memory"
           @click="openDynamicMedia(m, i)"
         >
           <div class="img-wrapper">
-             <img :src="m.url" :alt="m.caption" loading="lazy" />
+             <img :src="m.src" :alt="m.title" loading="lazy" />
           </div>
           <div class="photo-overlay">
             <span class="photo-date">Momen Eksklusif</span>
-            <h3 class="photo-title">{{ m.caption || 'Kenangan Baru' }}</h3>
+            <h3 class="photo-title">{{ m.title }}</h3>
           </div>
           <!-- Delete Button for Dynamic Photos -->
           <button class="btn-delete-memory" @click.stop="deleteMedia(m._id)">
@@ -319,6 +328,25 @@
       <div v-if="toast.show" class="love-toast" :class="toast.type">
         <span class="toast-icon">{{ toast.icon }}</span>
         <span class="toast-msg">{{ toast.message }}</span>
+      </div>
+    </Transition>
+
+    <!-- Premium Voice Note Notification -->
+    <Transition name="slide-up">
+      <div v-if="voiceNotif.show" class="vn-notif" @click="playVoiceNotifNote">
+        <div class="vn-notif-glow"></div>
+        <div class="vn-notif-icon">
+          <div class="vn-pulse"></div>
+          🎤
+        </div>
+        <div class="vn-notif-body">
+          <span class="vn-notif-title">Pesan Suara Baru! ✨</span>
+          <span class="vn-notif-sub">{{ voiceNotif.date }} &bull; {{ formatDuration(voiceNotif.duration) }}</span>
+          <span class="vn-notif-tap">🎧 Ketuk untuk dengarkan</span>
+        </div>
+        <button class="vn-notif-close" @click.stop="voiceNotif.show = false">×</button>
+        <!-- Auto-dismiss progress bar -->
+        <div class="vn-progress-bar"></div>
       </div>
     </Transition>
 
@@ -676,10 +704,23 @@ const handleScroll = () => {
   isScrolled.value = window.scrollY > 50
 }
 
+// Voice Note Notification State
+const voiceNotif = ref({ show: false, note: null, date: '', duration: 0 })
+let voiceNotifTimer = null
+
+const playVoiceNotifNote = () => {
+  if (voiceNotif.value.note) {
+    playVoiceNote(voiceNotif.value.note);
+    voiceNotif.value.show = false;
+  }
+}
+
 const isConnected = ref(false)
 const dynamicMedia = ref([])
 const showMediaModal = ref(false)
 const isUploading = ref(false)
+const isGlobalLoading = ref(false)
+const loadingMessage = ref('')
 const mediaForm = ref({
   type: 'photo', // 'photo' | 'video'
   url: '',
@@ -687,6 +728,11 @@ const mediaForm = ref({
 })
 
 onMounted(() => {
+  // Request browser notification permission on startup
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+
   window.addEventListener('scroll', handleScroll)
   
   // Setup Listeners DULU sebelum konek
@@ -735,11 +781,17 @@ const fetchGallery = async () => {
 const saveMedia = async () => {
   if (!mediaForm.value.url) return showToast("Pilih foto dulu ya! 📸", "warning", "⚠️");
 
-  isUploading.value = true;
+  isGlobalLoading.value = true;
+  loadingMessage.value = "Menyimpan kenangan manis... 💖";
+  
   try {
     const response = await axios.post(`${BACKEND_URL}/gallery`, mediaForm.value);
     if (response.data) {
       dynamicMedia.value.unshift(response.data);
+      
+      // Sync to other users via socket
+      socket.emit("new_gallery_item", response.data);
+      
       showMediaModal.value = false;
       // Reset form
       mediaForm.value = { type: 'photo', url: '', caption: '' };
@@ -752,22 +804,32 @@ const saveMedia = async () => {
       : "Gagal menyimpan kenangan (Database atau Jaringan bermasalah).";
     showToast(msg, "danger", "❌");
   } finally {
-    isUploading.value = false;
+    isGlobalLoading.value = false;
+    loadingMessage.value = "";
   }
 }
 
 const deleteMedia = async (id) => {
   if (!confirm("Hapus kenangan ini sayang? 🥺")) return;
   
+  isGlobalLoading.value = true;
+  loadingMessage.value = "Menghapus kenangan... 🗑️";
+  
   try {
     const response = await axios.delete(`${BACKEND_URL}/gallery/${id}`);
     if (response.status === 200 || response.status === 204) {
-      dynamicMedia.value = dynamicMedia.value.filter(m => m._id !== id);
+      dynamicMedia.value = dynamicMedia.value.filter(m => (m._id || m.id) !== id);
+      // Sync to other users via socket
+      socket.emit("delete_gallery_item", id);
+      
       showToast("Kenangan sudah dihapus. 🗑️", "info", "✨");
     }
   } catch (err) {
     console.error("❌ Delete Error:", err.message);
     showToast("Gagal menghapus. Coba lagi ya!", "danger", "❌");
+  } finally {
+    isGlobalLoading.value = false;
+    loadingMessage.value = "";
   }
 }
 
@@ -857,16 +919,51 @@ const setupSocketListeners = () => {
   });
 
   socket.on("new_voicenote", (note) => {
-    console.log("🆕 New voicenote received:", note._id);
-    voiceNotes.value.unshift({ 
+    console.log("🔆 New voicenote received:", note._id);
+    const mappedNote = {
       ...note,
       id: note._id,
       url: note.audioData
-    });
+    };
+    voiceNotes.value.unshift(mappedNote);
+
+    // Show premium in-app notification popup
+    voiceNotif.value = {
+      show: true,
+      note: mappedNote,
+      date: note.date || 'Baru saja',
+      duration: note.duration || 0
+    };
+
+    // Native browser push notification
+    if (Notification.permission === 'granted') {
+      new Notification('🎤 Pesan Suara Baru dari Sayang!', {
+        body: `Ada voice note masuk — Ketuk untuk dengarkan 🎧`,
+        icon: '/favicon.ico'
+      });
+    }
+
+    // Auto-dismiss after 10 seconds
+    clearTimeout(voiceNotifTimer);
+    voiceNotifTimer = setTimeout(() => {
+      voiceNotif.value.show = false;
+    }, 10000);
   });
 
   socket.on("deleted_voicenote", (id) => {
     voiceNotes.value = voiceNotes.value.filter(n => n.id !== id && n._id !== id);
+  });
+
+  // Real-time Gallery Listeners
+  socket.on("added_gallery_item", (item) => {
+    console.log("📸 New gallery item synced:", item._id);
+    const exists = dynamicMedia.value.some(m => m._id === item._id);
+    if (!exists) dynamicMedia.value.unshift(item);
+  });
+
+  socket.on("removed_gallery_item", (id) => {
+    console.log("🗑️ Gallery item deleted:", id);
+    dynamicMedia.value = dynamicMedia.value.filter(m => (m._id || m.id) !== id);
   });
 }
 
@@ -965,26 +1062,27 @@ const scrollToSection = (section) => {
 }
 
 // Lightbox
-// Unified Gallery Logic
-const allPhotos = computed(() => {
-  const dyn = dynamicMedia.value
+const dynamicPhotos = computed(() => {
+  return dynamicMedia.value
     .filter(m => m.type === 'photo')
     .map(m => ({ 
       src: m.url, 
       title: m.caption || 'Momen Baru', 
       date: 'Baru Saja', 
       desc: m.caption || 'Kenangan baru yang diabadikan.',
-      isDynamic: true
+      isDynamic: true,
+      _id: m._id || m.id
     }));
-  return [...dyn, ...photos.value];
 })
 
-const allVideos = computed(() => {
-  const dyn = dynamicMedia.value
+const dynamicVideos = computed(() => {
+  return dynamicMedia.value
     .filter(m => m.type === 'video')
-    .map(m => ({ src: m.url, title: m.caption }));
-  return [...dyn, ...videos.value];
+    .map(m => ({ src: m.url, title: m.caption, _id: m._id || m.id }));
 })
+
+const allPhotos = computed(() => [...dynamicPhotos.value, ...photos.value])
+const allVideos = computed(() => [...dynamicVideos.value, ...videos.value])
 
 const activeList = computed(() => activeSource.value === 'photos' ? allPhotos.value : trending.value)
 const activeImage = computed(() => activeList.value[currentIdx.value] || {})
@@ -1125,7 +1223,7 @@ const blobToBase64 = (blob) => {
 }
 
 // Helper: Image Compression (Resize & Quality)
-const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
+const compressImage = (file, maxWidth = 1080, quality = 0.6) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -1149,7 +1247,8 @@ const compressImage = (file, maxWidth = 1200, quality = 0.7) => {
         ctx.drawImage(img, 0, 0, width, height);
 
         canvas.toBlob((blob) => {
-          resolve(blob);
+          if (blob) resolve(blob);
+          else reject(new Error("Compression failed"));
         }, 'image/jpeg', quality);
       };
       img.onerror = reject;
@@ -1325,26 +1424,43 @@ const galaxyZoom = ref(-500) // Initial Zoom (far enough to see everything)
 
 onMounted(() => {
   // Generate many photos for the galaxy (duplicate existing photos)
-  const allPhotos = [...photos.value, ...photos.value, ...photos.value, ...photos.value] // x4 amount
+  const allCurrentPhotos = [...photos.value, ...photos.value, ...photos.value, ...photos.value]
   
-  starPhotos.value = allPhotos.map(p => {
-    // Spherical Distribution
-    const theta = Math.random() * 2 * Math.PI; // Random angle around
-    const phi = Math.acos((Math.random() * 2) - 1); // Random angle up/down
-    const radius = 600 + Math.random() * 400; // Distance from center (600px - 1000px)
+  // Progressive Loading for Galaxy Stars (prevent lag)
+  let index = 0;
+  const CHUNK_SIZE = 10;
+  
+  const generateStars = () => {
+    const nextChunk = allCurrentPhotos.slice(index, index + CHUNK_SIZE);
+    if (nextChunk.length === 0) return;
 
-    const x = radius * Math.sin(phi) * Math.cos(theta);
-    const y = radius * Math.sin(phi) * Math.sin(theta);
-    const z = radius * Math.cos(phi);
+    const newStars = nextChunk.map(p => {
+      const theta = Math.random() * 2 * Math.PI;
+      const phi = Math.acos((Math.random() * 2) - 1);
+      const radius = 600 + Math.random() * 400;
 
-    return {
-      src: p.src,
-      style: {
-        transform: `translate3d(${x}px, ${y}px, ${z}px)`,
-        animationDelay: `${Math.random() * 5}s`
+      const x = radius * Math.sin(phi) * Math.cos(theta);
+      const y = radius * Math.sin(phi) * Math.sin(theta);
+      const z = radius * Math.cos(phi);
+
+      return {
+        src: p.src,
+        style: {
+          transform: `translate3d(${x}px, ${y}px, ${z}px)`,
+          animationDelay: `${Math.random() * 5}s`
+        }
       }
+    });
+
+    starPhotos.value.push(...newStars);
+    index += CHUNK_SIZE;
+    
+    if (index < allCurrentPhotos.length) {
+      requestAnimationFrame(generateStars);
     }
-  })
+  };
+
+  requestAnimationFrame(generateStars);
 })
 
 const galaxyStyle = computed(() => {
@@ -3245,7 +3361,208 @@ const handleGalaxyZoom = (e) => {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Global Loading Overlay */
+.global-loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 183, 206, 0.7);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.3s ease;
+}
+
+.loading-content {
+  background: white;
+  padding: 40px;
+  border-radius: 30px;
+  box-shadow: 0 15px 50px rgba(255, 77, 136, 0.3);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+  border: 4px solid var(--primary);
+}
+
+.heart-spinner {
+  font-size: 4rem;
+  animation: heartBeat 0.8s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+@keyframes heartBeat {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.1); }
+  40% { transform: scale(1); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+.loading-text {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.8rem;
+  color: var(--primary);
+  font-weight: 700;
+}
+
 .hidden-input {
   display: none;
+}
+
+/* ==========================================
+   VOICE NOTE NOTIFICATION POPUP (Premium)
+   ========================================== */
+.vn-notif {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, 92vw);
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 10px 50px rgba(255, 77, 136, 0.35), 0 0 0 1px rgba(255, 133, 162, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  cursor: pointer;
+  z-index: 9998;
+  overflow: hidden;
+  border: 2px solid rgba(255, 133, 162, 0.3);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.vn-notif:hover {
+  transform: translateX(-50%) translateY(-4px);
+  box-shadow: 0 16px 60px rgba(255, 77, 136, 0.45);
+}
+
+.vn-notif-glow {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255, 181, 206, 0.15), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.vn-notif-icon {
+  position: relative;
+  font-size: 2.4rem;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #ffd6e5, #ffb3cd);
+  border-radius: 50%;
+}
+
+.vn-pulse {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 3px solid var(--primary);
+  animation: vnPulse 1.5s ease-out infinite;
+}
+
+@keyframes vnPulse {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+.vn-notif-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.vn-notif-title {
+  font-family: 'Dancing Script', cursive;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vn-notif-sub {
+  font-size: 0.78rem;
+  color: #888;
+  font-weight: 500;
+}
+
+.vn-notif-tap {
+  font-size: 0.8rem;
+  color: var(--primary);
+  font-weight: 600;
+  animation: tapBlink 2s ease infinite;
+}
+
+@keyframes tapBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.vn-notif-close {
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.06);
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  font-size: 1.1rem;
+  color: #aaa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+  line-height: 1;
+}
+
+.vn-notif-close:hover {
+  background: #ffd6e5;
+  color: var(--primary);
+}
+
+/* Slide-up animation for notification */
+.slide-up-enter-active {
+  animation: slideUpIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.slide-up-leave-active {
+  animation: slideDownOut 0.3s ease forwards;
+}
+
+@keyframes slideUpIn {
+  from { transform: translateX(-50%) translateY(120%); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0);   opacity: 1; }
+}
+
+@keyframes slideDownOut {
+  from { transform: translateX(-50%) translateY(0);   opacity: 1; }
+  to   { transform: translateX(-50%) translateY(120%); opacity: 0; }
+}
+
+/* Auto-dismiss progress bar */
+.vn-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  width: 100%;
+  background: linear-gradient(90deg, var(--primary), #ff9a9e);
+  border-radius: 0 0 24px 24px;
+  transform-origin: left center;
+  animation: shrinkProgress 10s linear forwards;
+}
+
+@keyframes shrinkProgress {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
 }
 </style>
