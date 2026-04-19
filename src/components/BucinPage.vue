@@ -217,7 +217,7 @@
         <!-- Dynamic Media from API -->
         <div 
           v-for="(m, i) in dynamicMedia.filter(x => x.type === 'photo')"
-          :key="'dyn-'+i"
+          :key="'dyn-'+(m._id || i)"
           class="photo-card dynamic-memory"
           @click="openDynamicMedia(m, i)"
         >
@@ -228,6 +228,10 @@
             <span class="photo-date">Momen Eksklusif</span>
             <h3 class="photo-title">{{ m.caption || 'Kenangan Baru' }}</h3>
           </div>
+          <!-- Delete Button for Dynamic Photos -->
+          <button class="btn-delete-memory" @click.stop="deleteMedia(m._id)">
+            <span class="delete-icon">🗑️</span>
+          </button>
         </div>
 
         <!-- Static Photos -->
@@ -379,10 +383,15 @@
               />
             </div>
 
-            <button class="btn-save-media" @click="saveMedia">
+            <div v-if="isUploading" class="upload-loading">
+              <div class="spinner"></div>
+              <p>Sabar ya sayang, lagi upload... 💖</p>
+            </div>
+
+            <button v-else class="btn-save-media" @click="saveMedia">
               💾 Simpan & Kembali
             </button>
-            <button class="btn-cancel-modal" @click="showMediaModal = false">
+            <button class="btn-cancel-modal" @click="showMediaModal = false" :disabled="isUploading">
               Batal
             </button>
           </div>
@@ -670,6 +679,7 @@ const handleScroll = () => {
 const isConnected = ref(false)
 const dynamicMedia = ref([])
 const showMediaModal = ref(false)
+const isUploading = ref(false)
 const mediaForm = ref({
   type: 'photo', // 'photo' | 'video'
   url: '',
@@ -725,11 +735,13 @@ const fetchGallery = async () => {
 const saveMedia = async () => {
   if (!mediaForm.value.url) return showToast("Pilih foto dulu ya! 📸", "warning", "⚠️");
 
+  isUploading.value = true;
   try {
     const response = await axios.post(`${BACKEND_URL}/gallery`, mediaForm.value);
     if (response.data) {
       dynamicMedia.value.unshift(response.data);
       showMediaModal.value = false;
+      // Reset form
       mediaForm.value = { type: 'photo', url: '', caption: '' };
       showToast("Kenangan kita berhasil disimpan! 💖", "success", "✨");
     }
@@ -739,6 +751,23 @@ const saveMedia = async () => {
       ? "File terlalu besar untuk hosting Vercel. Kompresi otomatis gagal menurunkan ukuran cukup banyak."
       : "Gagal menyimpan kenangan (Database atau Jaringan bermasalah).";
     showToast(msg, "danger", "❌");
+  } finally {
+    isUploading.value = false;
+  }
+}
+
+const deleteMedia = async (id) => {
+  if (!confirm("Hapus kenangan ini sayang? 🥺")) return;
+  
+  try {
+    const response = await axios.delete(`${BACKEND_URL}/gallery/${id}`);
+    if (response.status === 200 || response.status === 204) {
+      dynamicMedia.value = dynamicMedia.value.filter(m => m._id !== id);
+      showToast("Kenangan sudah dihapus. 🗑️", "info", "✨");
+    }
+  } catch (err) {
+    console.error("❌ Delete Error:", err.message);
+    showToast("Gagal menghapus. Coba lagi ya!", "danger", "❌");
   }
 }
 
@@ -746,7 +775,10 @@ const handleFileUpload = async (event) => {
   const file = event.target.files[0];
   if (!file) return;
 
+  if (isUploading.value) return; // Prevent double trigger
+
   try {
+    isUploading.value = true;
     let finalFile = file;
 
     // Foto Otomatis Dikompres jika tipe image
@@ -759,16 +791,24 @@ const handleFileUpload = async (event) => {
        if (file.size > 4 * 1024 * 1024) {
          alert("⚠️ Video terlalu besar untuk Vercel (Max 4MB). Coba video lebih pendek ya sayang!");
          event.target.value = '';
+         isUploading.value = false;
          return;
        }
     }
 
     const base64 = await blobToBase64(finalFile);
     mediaForm.value.url = base64;
-    showToast("Media siap disimpan! 💖", "success", "✅");
+    
+    // ONE-CLICK UPLOAD: Langsung panggil saveMedia
+    showToast("Sedang mengupload... 🚀", "info", "☁️");
+    await saveMedia();
+    
+    // Clear input so same file can be selected again
+    event.target.value = '';
   } catch (err) {
     console.error("File Optimization Error:", err);
     showToast("Gagal memproses file.", "danger", "❌");
+    isUploading.value = false;
   }
 }
 
@@ -3135,4 +3175,77 @@ const handleGalaxyZoom = (e) => {
   transform: scale(0.95);
 }
 
+/* Delete Button for Gallery */
+.btn-delete-memory {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  width: 35px;
+  height: 35px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.photo-card:hover .btn-delete-memory {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.btn-delete-memory:hover {
+  background: #ff4d6d;
+  color: white;
+  transform: scale(1.1) rotate(15deg) !important;
+  box-shadow: 0 5px 15px rgba(255, 77, 109, 0.4);
+}
+
+.delete-icon {
+  font-size: 16px;
+}
+
+/* Upload Loading */
+.upload-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 15px;
+  margin: 20px 0;
+  padding: 20px;
+  background: rgba(255, 133, 162, 0.1);
+  border-radius: 20px;
+  animation: pulse 2s infinite;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 133, 162, 0.2);
+  border-top: 4px solid var(--primary);
+  border-radius: 50%;
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.98); opacity: 0.8; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.hidden-input {
+  display: none;
+}
 </style>
