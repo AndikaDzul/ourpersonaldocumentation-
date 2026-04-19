@@ -554,6 +554,54 @@
     </Transition>
     <!-- WhatsApp Voice Note Modal -->
     <Transition name="fade">
+      <div v-if="showWAModal" class="media-modal-overlay">
+        <div class="media-modal-card wa-card">
+          <button class="modal-close" @click="showWAModal = false">×</button>
+          <h2 class="modal-title">💌 Kirim ke WhatsApp</h2>
+          <p class="modal-subtitle">Mau kirim voice note ini ke WA siapa sayang?</p>
+          <div class="wa-options">
+            <button @click="sendToWA('6285741366141')" class="wa-btn">Ke Andika 💖</button>
+            <button @click="sendToWA('628812678622')" class="wa-btn">Ke Kamu 🌸</button>
+          </div>
+          <div class="wa-custom">
+            <p>Atau tulis pesan tambahan:</p>
+            <textarea v-model="waMessage" placeholder="Tulis pesan manis kamu di sini..." class="modal-input"></textarea>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Global Microphone Permission Modal -->
+    <Transition name="fade">
+      <div v-if="micModal.show" class="media-modal-overlay mic-modal-overlay">
+        <div class="media-modal-card mic-card">
+          <div class="mic-status-icon" :class="micModal.reason">
+            <span v-if="micModal.reason === 'denied'">🔒</span>
+            <span v-else-if="micModal.reason === 'insecure'">🌐</span>
+            <span v-else>🎤</span>
+          </div>
+          
+          <h2 class="modal-title">Izin Mikrofon</h2>
+          <p class="mic-error-msg">{{ micModal.message }}</p>
+
+          <div class="mic-instructions" v-if="micModal.reason === 'denied'">
+            <div class="step">1. Klik ikon kunci/kamera di address bar</div>
+            <div class="step">2. Ubah Mikrofon menjadi <b>"Izinkan"</b></div>
+            <div class="step">3. Klik tombol di bawah untuk coba lagi</div>
+          </div>
+
+          <div class="mic-actions">
+            <button v-if="micModal.reason === 'denied'" class="btn-save-media" @click="openMicSettings">
+              Coba Izinkan Lagi
+            </button>
+            <button class="btn-cancel-modal" @click="micModal.show = false">
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+    <Transition name="fade">
       <div v-if="showWAModal" class="modal-overlay">
         <div class="modal-box">
           <h3>Kirim Voice Note ke Siapa? 📲</h3>
@@ -763,6 +811,24 @@ const handleScroll = () => {
 // Voice Note Notification State
 const voiceNotif = ref({ show: false, note: null, date: '', duration: 0 })
 let voiceNotifTimer = null
+
+// Mic Permission Modal State
+const micModal = ref({ show: false, reason: '', message: '' })
+
+const openMicSettings = () => {
+  // Best effort: try to trigger the browser's mic dialog again
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      // User allowed! Close modal and start recording
+      stream.getTracks().forEach(t => t.stop())
+      micModal.value.show = false
+      startRecording()
+    })
+    .catch(() => {
+      // Still denied - show the browser instructions
+      window.open('https://support.google.com/chrome/answer/2693767', '_blank')
+    })
+}
 
 const playVoiceNotifNote = () => {
   if (voiceNotif.value.note) {
@@ -1359,8 +1425,35 @@ const toggleRecording = async () => {
 }
 
 const startRecording = async () => {
+  // 1. Check for secure context (HTTPS or localhost required)
+  if (!navigator.mediaDevices || !window.isSecureContext) {
+    micModal.value = {
+      show: true,
+      reason: 'insecure',
+      message: 'Voice Note hanya bisa digunakan di HTTPS atau localhost. Jika kamu membuka via IP lokal (misal 192.168.x.x), koneksi dianggap tidak aman oleh browser.'
+    }
+    return
+  }
+
+  // 2. Pre-check permission if browser supports it
+  if (navigator.permissions) {
+    try {
+      const status = await navigator.permissions.query({ name: 'microphone' })
+      if (status.state === 'denied') {
+        micModal.value = {
+          show: true,
+          reason: 'denied',
+          message: 'Izin mikrofon sudah ditolak. Klik ikon kunci 🔒 di address bar browser kamu, lalu ubah izin Mikrofon menjadi "Izinkan".'
+        }
+        return
+      }
+    } catch (e) { /* permissions API not available on this browser, try anyway */ }
+  }
+
+  // 3. Request mic access
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    micModal.value.show = false
     mediaRecorder.value = new MediaRecorder(stream)
     audioChunks.value = []
 
@@ -1370,30 +1463,38 @@ const startRecording = async () => {
 
     mediaRecorder.value.onstop = async () => {
       const audioBlob = new Blob(audioChunks.value, { type: 'audio/mp3' })
-      
       const success = await saveVoiceNoteToDB(audioBlob, recordingDuration.value)
-      
       if (success) {
-        // Voice note tersimpan otomatis ke database
         showToast("Pesan suara sudah tersimpan di galeri! 💖", "success", "💌");
       }
-      
       recordingDuration.value = 0
     }
 
     mediaRecorder.value.start()
     isRecording.value = true
-    
-    recordingTimer = setInterval(() => {
-      recordingDuration.value++
-    }, 1000)
+    recordingTimer = setInterval(() => { recordingDuration.value++ }, 1000)
 
   } catch (error) {
-    console.error('Error accessing microphone:', error)
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-      alert('Gagal mengakses mikrofon! 🎤\n\nVoice Note hanya jalan di localhost atau HTTPS.')
+    console.error('Mic error:', error.name, error.message)
+
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      micModal.value = {
+        show: true,
+        reason: 'denied',
+        message: 'Kamu menolak akses mikrofon. Klik ikon kunci 🔒 di address bar browser dan ubah izin Mikrofon menjadi "Izinkan", lalu muat ulang halaman.'
+      }
+    } else if (error.name === 'NotFoundError') {
+      micModal.value = {
+        show: true,
+        reason: 'notfound',
+        message: 'Mikrofon tidak ditemukan pada perangkat kamu. Pastikan mikrofon terpasang dan tidak digunakan aplikasi lain.'
+      }
     } else {
-      alert('Maaf, tidak bisa mengakses mikrofon. Izinkan akses dulu ya! 🎤')
+      micModal.value = {
+        show: true,
+        reason: 'unknown',
+        message: `Gagal mengakses mikrofon (${error.name}). Coba muat ulang halaman atau gunakan browser Chrome/Firefox terbaru.`
+      }
     }
   }
 }
