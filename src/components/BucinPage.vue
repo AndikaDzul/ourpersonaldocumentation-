@@ -638,7 +638,7 @@ import axios from 'axios';
 
 // GANTI URL INI dengan URL dari Localtunnel (HTTPS) agar bisa dibuka di HP
 // Contoh: "https://purple-cat-22.loca.lt"
-const BACKEND_URL = "https://may-worldd-y8ps.vercel.app"; 
+const BACKEND_URL = "https://may-worldd-efn4.vercel.app"; 
 // TIPS: Jika buka di HP, ganti "localhost" di atas dengan IP komputer kamu (misal: 192.168.1.5)
 
 const socket = io(BACKEND_URL, {
